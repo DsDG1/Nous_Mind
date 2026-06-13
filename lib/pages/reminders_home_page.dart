@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../models/reminder.dart';
+import '../viewmodels/reminders_view_model.dart';
+import '../widgets/empty_state.dart';
+import '../widgets/reminder_list_item.dart';
+
+/// Home screen: shows all reminders, hosts the FAB to add a new one, and
+/// routes taps to the editor and left-swipes to delete.
+class RemindersHomePage extends StatelessWidget {
+  const RemindersHomePage({super.key});
+
+  Future<void> _openEditor(BuildContext context, Reminder? existing) async {
+    await context.push('/editor', extra: existing);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('提醒事项')),
+      body: Consumer<RemindersViewModel>(
+        builder: (context, viewModel, _) {
+          if (!viewModel.isLoaded) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final items = viewModel.reminders;
+          if (items.isEmpty) {
+            return const EmptyState(
+              icon: Icons.notifications_none,
+              title: '还没有提醒',
+              subtitle: '点击右下角 + 添加',
+            );
+          }
+          return ListView.separated(
+            itemCount: items.length,
+            separatorBuilder: (context, index) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final reminder = items[index];
+              return ReminderListItem(
+                reminder: reminder,
+                onTap: () => _openEditor(context, reminder),
+                onDelete: () =>
+                    _deleteWithFeedback(context, viewModel, reminder),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _openEditor(context, null),
+        tooltip: '添加提醒',
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Future<void> _deleteWithFeedback(
+    BuildContext context,
+    RemindersViewModel viewModel,
+    Reminder reminder,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await viewModel.delete(reminder.id);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('已删除「${reminder.title}」'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+}
