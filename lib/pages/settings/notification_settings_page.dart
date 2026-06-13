@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/app_settings.dart';
+import '../../router.dart';
 import '../../services/notification_service.dart';
 import '../../viewmodels/settings_view_model.dart';
+import '../../widgets/reminder_popup.dart';
 import '../../widgets/settings_section.dart';
 
 /// Settings subpage for notification behavior.
@@ -126,6 +128,14 @@ class NotificationSettingsPage extends StatelessWidget {
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text(_sentMessage)));
+    final navigatorState = rootNavigatorKey.currentState;
+    if (navigatorState != null) {
+      await showReminderPopup(
+        // ignore: use_build_context_synchronously
+        context: navigatorState.context,
+        title: _testTitle,
+      );
+    }
   }
 
   Future<void> _editQuietHours(

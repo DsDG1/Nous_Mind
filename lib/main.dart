@@ -12,6 +12,7 @@ import 'services/settings_storage.dart';
 import 'viewmodels/inspirations_view_model.dart';
 import 'viewmodels/reminders_view_model.dart';
 import 'viewmodels/settings_view_model.dart';
+import 'widgets/reminder_popup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,11 +58,28 @@ class RemindersApp extends StatelessWidget {
           create: (_) => SettingsViewModel(settingsStorage),
         ),
         ChangeNotifierProvider<RemindersViewModel>(
-          create: (context) => RemindersViewModel(
-            reminderStorage,
-            notifications,
-            context.read<SettingsViewModel>(),
-          ),
+          create: (context) {
+            final vm = RemindersViewModel(
+              reminderStorage,
+              notifications,
+              context.read<SettingsViewModel>(),
+            );
+            vm.onReminderDue = (reminder) {
+              final navigatorState = rootNavigatorKey.currentState;
+              if (navigatorState == null) {
+                return;
+              }
+              showReminderPopup(
+                context: navigatorState.context,
+                title: reminder.title,
+                onSnooze: () => vm.snoozeReminder(
+                  reminder.id,
+                  const Duration(minutes: 5),
+                ),
+              );
+            };
+            return vm;
+          },
         ),
         ChangeNotifierProvider<InspirationsViewModel>(
           create: (_) => InspirationsViewModel(inspirationStorage, imageStore),

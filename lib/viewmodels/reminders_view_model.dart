@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,11 @@ import 'settings_view_model.dart';
 /// on-disk state matches the in-memory state when the call returns.
 /// Notification scheduling is best-effort — failures are logged but never
 /// thrown, so a missing permission does not break the in-memory flow.
+///
+/// When [onReminderDue] is set, the view model tracks the nearest upcoming
+/// reminder via an internal timer and fires the callback at the exact
+/// [Reminder.reminderTime]. This is used to show an in-app popup regardless
+/// of which tab is active.
 class RemindersViewModel extends ChangeNotifier {
   RemindersViewModel(this._storage, this._notifications, this._settings) {
     _bootstrap();
@@ -28,8 +34,21 @@ class RemindersViewModel extends ChangeNotifier {
   bool _loaded = false;
   bool get isLoaded => _loaded;
 
+  /// Invoked (on the next event-loop tick after the timer fires) when a
+  /// reminder reaches its exact [Reminder.reminderTime] while the app is
+  /// running. Set by [main] to show an in-app popup.
+  void Function(Reminder)? onReminderDue;
+
+  Timer? _nearestTimer;
+
   /// Unmodifiable view of the current list.
   List<Reminder> get reminders => List.unmodifiable(_reminders);
+
+  @override
+  void dispose() {
+    _cancelNearestTimer();
+    super.dispose();
+  }
 
   Future<void> _bootstrap() async {
     final loaded = await _storage.loadAll();
@@ -41,6 +60,7 @@ class RemindersViewModel extends ChangeNotifier {
     // Re-arm any future reminders. Covers the case where the OS dropped
     // scheduled alarms (e.g. Android after device reboot).
     await _rescheduleAll();
+    _scheduleNearestTimer();
   }
 
   Future<void> _rescheduleAll() async {
@@ -67,6 +87,7 @@ class RemindersViewModel extends ChangeNotifier {
     notifyListeners();
     await _notifications.requestPermissions();
     await _safeSchedule(reminder);
+    _scheduleNearestTimer();
   }
 
   /// Replaces the reminder with the same [Reminder.id] and persists the list.
@@ -80,6 +101,7 @@ class RemindersViewModel extends ChangeNotifier {
     notifyListeners();
     await _notifications.cancelReminder(reminder.id);
     await _safeSchedule(reminder);
+    _scheduleNearestTimer();
   }
 
   /// Removes the reminder with [id] from the list and persists the change.
@@ -92,6 +114,7 @@ class RemindersViewModel extends ChangeNotifier {
     await _storage.saveAll(_reminders);
     notifyListeners();
     await _notifications.cancelReminder(id);
+    _scheduleNearestTimer();
   }
 
   /// Wraps [NotificationService.scheduleReminder] so that a permission
@@ -116,5 +139,61 @@ class RemindersViewModel extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
+  }
+
+  /// Pushes the reminder's time forward by [duration] and re-schedules
+  /// both the system notification and the in-app due timer.
+  Future<void> snoozeReminder(String id, Duration duration) async {
+    final index = _reminders.indexWhere((r) => r.id == id);
+    if (index == -1) {
+      return;
+    }
+    final reminder = _reminders[index];
+    final snoozed = reminder.copyWith(
+      reminderTime: DateTime.now().add(duration),
+    );
+    _reminders[index] = snoozed;
+    await _storage.saveAll(_reminders);
+    notifyListeners();
+    await _notifications.cancelReminder(id);
+    await _safeSchedule(snoozed);
+    _scheduleNearestTimer();
+  }
+
+  // ---- In-app due-timer helpers --------------------------------
+
+  void _cancelNearestTimer() {
+    _nearestTimer?.cancel();
+    _nearestTimer = null;
+  }
+
+  /// Finds the nearest future [Reminder.reminderTime] and arms a one-shot
+  /// [Timer] to fire at that instant. Timer is best-effort; on some
+  /// platforms (Android Doze) the callback may be delayed.
+  void _scheduleNearestTimer() {
+    _cancelNearestTimer();
+    final now = DateTime.now();
+    Reminder? nearest;
+    for (final reminder in _reminders) {
+      if (reminder.reminderTime.isAfter(now)) {
+        if (nearest == null ||
+            reminder.reminderTime.isBefore(nearest.reminderTime)) {
+          nearest = reminder;
+        }
+      }
+    }
+    if (nearest == null) {
+      return;
+    }
+    final delay = nearest.reminderTime.difference(now);
+    if (delay <= Duration.zero) {
+      return;
+    }
+    _nearestTimer = Timer(delay, () => _onNearestDue(nearest!));
+  }
+
+  void _onNearestDue(Reminder reminder) {
+    onReminderDue?.call(reminder);
+    _scheduleNearestTimer();
   }
 }

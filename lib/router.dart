@@ -15,7 +15,7 @@ import 'widgets/circular_reveal_clip.dart';
 
 /// Navigator keys — separate per branch so each tab maintains its own
 /// navigation history, plus a root key for full-screen overlays (editors).
-final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
 );
 final GlobalKey<NavigatorState> _remindersBranchKey = GlobalKey<NavigatorState>(
@@ -31,7 +31,7 @@ final GlobalKey<NavigatorState> _settingsBranchKey = GlobalKey<NavigatorState>(
 /// so switching tabs preserves the per-tab Navigator stack (an open editor
 /// stays open across tab switches).
 final GoRouter router = GoRouter(
-  navigatorKey: _rootNavigatorKey,
+  navigatorKey: rootNavigatorKey,
   initialLocation: '/',
   routes: <RouteBase>[
     StatefulShellRoute.indexedStack(
@@ -47,7 +47,7 @@ final GoRouter router = GoRouter(
               routes: <RouteBase>[
                 GoRoute(
                   path: 'editor',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
                     final extra = state.extra as (Reminder?, Offset);
                     return CustomTransitionPage(
@@ -77,7 +77,7 @@ final GoRouter router = GoRouter(
               routes: <RouteBase>[
                 GoRoute(
                   path: 'editor',
-                  parentNavigatorKey: _rootNavigatorKey,
+                  parentNavigatorKey: rootNavigatorKey,
                   builder: (context, state) => InspirationEditorPage(
                     initial: state.extra as Inspiration?,
                   ),
