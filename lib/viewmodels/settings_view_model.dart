@@ -42,4 +42,7 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setSnoozeDuration(SnoozeDuration snooze) =>
       _update(_settings.copyWith(snoozeDuration: snooze));
+
+  Future<void> setAutoDeleteAfter24h(bool value) =>
+      _update(_settings.copyWith(autoDeleteAfter24h: value));
 }

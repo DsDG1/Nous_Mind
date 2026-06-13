@@ -14,13 +14,11 @@ import '../widgets/image_preview.dart';
 /// Page used for both creating a new reminder and editing an existing one.
 ///
 /// When [initial] is null the page is in "add" mode; otherwise it pre-fills
-/// the form. [prefillImagePath] is used by the screenshot tile flow to
-/// supply an image before the user enters any text.
+/// the form.
 class ReminderEditorPage extends StatefulWidget {
-  const ReminderEditorPage({super.key, this.initial, this.prefillImagePath});
+  const ReminderEditorPage({super.key, this.initial});
 
   final Reminder? initial;
-  final String? prefillImagePath;
 
   bool get isEditing => initial != null;
 
@@ -42,7 +40,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     super.initState();
     _titleController = TextEditingController(text: widget.initial?.title ?? '');
     _reminderTime = widget.initial?.reminderTime ?? _defaultTime();
-    _imagePath = widget.initial?.imagePath ?? widget.prefillImagePath;
+    _imagePath = widget.initial?.imagePath;
   }
 
   @override

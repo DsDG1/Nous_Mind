@@ -66,10 +66,7 @@ class QuietHoursWindow {
   }
 
   QuietHoursWindow copyWith({TimeOfDay? start, TimeOfDay? end}) {
-    return QuietHoursWindow(
-      start: start ?? this.start,
-      end: end ?? this.end,
-    );
+    return QuietHoursWindow(start: start ?? this.start, end: end ?? this.end);
   }
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -91,10 +88,7 @@ class QuietHoursWindow {
     final startMinutes = minutesOf(json['start_minutes']);
     final endMinutes = minutesOf(json['end_minutes']);
     return QuietHoursWindow(
-      start: TimeOfDay(
-        hour: startMinutes ~/ 60,
-        minute: startMinutes % 60,
-      ),
+      start: TimeOfDay(hour: startMinutes ~/ 60, minute: startMinutes % 60),
       end: TimeOfDay(hour: endMinutes ~/ 60, minute: endMinutes % 60),
     );
   }
@@ -146,6 +140,7 @@ class AppSettings {
     this.quietHoursEnabled = false,
     this.quietHours = const QuietHoursWindow(),
     this.snoozeDuration = const SnoozeDuration(),
+    this.autoDeleteAfter24h = true,
   });
 
   final ThemeMode themeMode;
@@ -155,6 +150,11 @@ class AppSettings {
   final QuietHoursWindow quietHours;
   final SnoozeDuration snoozeDuration;
 
+  /// When `true`, reminders whose [Reminder.reminderTime] is more than 24
+  /// hours in the past are removed on app start and on every foreground
+  /// resume. Anchored to scheduled time, not creation or fire time.
+  final bool autoDeleteAfter24h;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     AppSeedColor? seedColor,
@@ -162,6 +162,7 @@ class AppSettings {
     bool? quietHoursEnabled,
     QuietHoursWindow? quietHours,
     SnoozeDuration? snoozeDuration,
+    bool? autoDeleteAfter24h,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -170,6 +171,7 @@ class AppSettings {
       quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
       quietHours: quietHours ?? this.quietHours,
       snoozeDuration: snoozeDuration ?? this.snoozeDuration,
+      autoDeleteAfter24h: autoDeleteAfter24h ?? this.autoDeleteAfter24h,
     );
   }
 
@@ -180,6 +182,7 @@ class AppSettings {
     'quiet_hours_enabled': quietHoursEnabled,
     'quiet_hours': quietHours.toJson(),
     'snooze_duration': snoozeDuration.toJson(),
+    'auto_delete_after_24h': autoDeleteAfter24h,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -216,6 +219,7 @@ class AppSettings {
         (json['snooze_duration'] as Map<String, dynamic>?) ??
             const <String, dynamic>{},
       ),
+      autoDeleteAfter24h: (json['auto_delete_after_24h'] as bool?) ?? true,
     );
   }
 }

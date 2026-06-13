@@ -8,7 +8,6 @@ import 'services/inspiration_image_store.dart';
 import 'services/inspiration_storage.dart';
 import 'services/notification_service.dart';
 import 'services/reminder_storage.dart';
-import 'services/screenshot_service.dart';
 import 'services/settings_storage.dart';
 import 'viewmodels/inspirations_view_model.dart';
 import 'viewmodels/reminders_view_model.dart';
@@ -24,7 +23,6 @@ Future<void> main() async {
   final settingsStorage = SettingsStorage(prefs);
   final notifications = NotificationService();
   await notifications.init(onTapNotification: () => router.go('/'));
-  final screenshotService = ScreenshotService(imageStore);
   runApp(
     RemindersApp(
       reminderStorage: reminderStorage,
@@ -32,12 +30,11 @@ Future<void> main() async {
       imageStore: imageStore,
       notifications: notifications,
       settingsStorage: settingsStorage,
-      screenshotService: screenshotService,
     ),
   );
 }
 
-class RemindersApp extends StatelessWidget {
+class RemindersApp extends StatefulWidget {
   const RemindersApp({
     super.key,
     required this.reminderStorage,
@@ -45,7 +42,6 @@ class RemindersApp extends StatelessWidget {
     required this.imageStore,
     required this.notifications,
     required this.settingsStorage,
-    required this.screenshotService,
   });
 
   final ReminderStorage reminderStorage;
@@ -53,64 +49,12 @@ class RemindersApp extends StatelessWidget {
   final InspirationImageStore imageStore;
   final NotificationService notifications;
   final SettingsStorage settingsStorage;
-  final ScreenshotService screenshotService;
 
   @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: <SingleChildWidget>[
-        ChangeNotifierProvider<SettingsViewModel>(
-          create: (_) => SettingsViewModel(settingsStorage),
-        ),
-        ChangeNotifierProvider<RemindersViewModel>(
-          create: (context) {
-            final vm = RemindersViewModel(
-              reminderStorage,
-              notifications,
-              context.read<SettingsViewModel>(),
-              imageStore,
-            );
-            vm.onReminderDue = (reminder) {
-              final navigatorState = rootNavigatorKey.currentState;
-              if (navigatorState == null) {
-                return;
-              }
-              showReminderPopup(
-                context: navigatorState.context,
-                title: reminder.title,
-                onSnooze: () => vm.snoozeReminder(
-                  reminder.id,
-                  const Duration(minutes: 5),
-                ),
-              );
-            };
-            return vm;
-          },
-        ),
-        ChangeNotifierProvider<InspirationsViewModel>(
-          create: (_) => InspirationsViewModel(inspirationStorage, imageStore),
-        ),
-        Provider<InspirationImageStore>.value(value: imageStore),
-        Provider<NotificationService>.value(value: notifications),
-        Provider<ScreenshotService>.value(value: screenshotService),
-      ],
-      child: _AppWithLifecycle(screenshotService: screenshotService),
-    );
-  }
+  State<RemindersApp> createState() => _RemindersAppState();
 }
 
-/// Listens for app resume events to check for pending screenshots captured
-/// by the native TileService / OverlayService flow.
-class _AppWithLifecycle extends StatefulWidget {
-  const _AppWithLifecycle({required this.screenshotService});
-
-  final ScreenshotService screenshotService;
-
-  @override
-  State<_AppWithLifecycle> createState() => _AppWithLifecycleState();
-}
-
-class _AppWithLifecycleState extends State<_AppWithLifecycle>
+class _RemindersAppState extends State<RemindersApp>
     with WidgetsBindingObserver {
   @override
   void initState() {
@@ -126,33 +70,79 @@ class _AppWithLifecycleState extends State<_AppWithLifecycle>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      widget.screenshotService.checkPendingScreenshot();
+    if (state != AppLifecycleState.resumed) {
+      return;
     }
+    final navigatorContext = rootNavigatorKey.currentContext;
+    if (navigatorContext == null) {
+      return;
+    }
+    Provider.of<RemindersViewModel>(
+      navigatorContext,
+      listen: false,
+    ).onAppResumed();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<SettingsViewModel>(
-      builder: (context, vm, _) {
-        final seed = vm.settings.seedColor.color;
-        return MaterialApp.router(
-          title: '提醒事项',
-          themeMode: vm.settings.themeMode,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(seedColor: seed),
+    return MultiProvider(
+      providers: <SingleChildWidget>[
+        ChangeNotifierProvider<SettingsViewModel>(
+          create: (_) => SettingsViewModel(widget.settingsStorage),
+        ),
+        ChangeNotifierProvider<RemindersViewModel>(
+          create: (context) {
+            final vm = RemindersViewModel(
+              widget.reminderStorage,
+              widget.notifications,
+              context.read<SettingsViewModel>(),
+              widget.imageStore,
+            );
+            vm.onReminderDue = (reminder) {
+              final navigatorState = rootNavigatorKey.currentState;
+              if (navigatorState == null) {
+                return;
+              }
+              showReminderPopup(
+                context: navigatorState.context,
+                title: reminder.title,
+                onSnooze: () =>
+                    vm.snoozeReminder(reminder.id, const Duration(minutes: 5)),
+              );
+            };
+            return vm;
+          },
+        ),
+        ChangeNotifierProvider<InspirationsViewModel>(
+          create: (_) => InspirationsViewModel(
+            widget.inspirationStorage,
+            widget.imageStore,
           ),
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: seed,
-              brightness: Brightness.dark,
+        ),
+        Provider<InspirationImageStore>.value(value: widget.imageStore),
+        Provider<NotificationService>.value(value: widget.notifications),
+      ],
+      child: Consumer<SettingsViewModel>(
+        builder: (context, vm, _) {
+          final seed = vm.settings.seedColor.color;
+          return MaterialApp.router(
+            title: '提醒事项',
+            themeMode: vm.settings.themeMode,
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(seedColor: seed),
             ),
-          ),
-          routerConfig: router,
-        );
-      },
+            darkTheme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: seed,
+                brightness: Brightness.dark,
+              ),
+            ),
+            routerConfig: router,
+          );
+        },
+      ),
     );
   }
 }

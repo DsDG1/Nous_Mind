@@ -68,6 +68,9 @@ class RemindersViewModel extends ChangeNotifier {
     // scheduled alarms (e.g. Android after device reboot).
     await _rescheduleAll();
     _scheduleNearestTimer();
+    // Honour the user's auto-delete preference on cold start so past-due
+    // reminders from a previous session don't accumulate forever.
+    await _purgeExpiredReminders();
   }
 
   Future<void> _rescheduleAll() async {
@@ -172,6 +175,57 @@ class RemindersViewModel extends ChangeNotifier {
     await _safeSchedule(snoozed);
     _scheduleNearestTimer();
   }
+
+  /// Removes reminders whose scheduled time is more than 24 hours in the
+  /// past, but only when the user has opted in via [AppSettings].
+  /// Anchored to [Reminder.reminderTime] — snoozing a reminder refreshes
+  /// `reminderTime` and therefore extends the 24-hour window naturally.
+  Future<void> _purgeExpiredReminders() async {
+    if (!_settings.settings.autoDeleteAfter24h) {
+      return;
+    }
+    final now = DateTime.now();
+    final expired = _reminders
+        .where(
+          (r) => r.reminderTime.add(const Duration(hours: 24)).isBefore(now),
+        )
+        .toList();
+    if (expired.isEmpty) {
+      return;
+    }
+    for (final reminder in expired) {
+      try {
+        await _notifications.cancelReminder(reminder.id);
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to cancel notification during purge',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      final imagePath = reminder.imagePath;
+      if (imagePath != null) {
+        try {
+          await _imageStore.deleteByPath(imagePath);
+        } on Exception catch (error, stackTrace) {
+          developer.log(
+            'Failed to delete reminder image during purge',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+    final expiredIds = expired.map((r) => r.id).toSet();
+    _reminders.removeWhere((r) => expiredIds.contains(r.id));
+    await _storage.saveAll(_reminders);
+    notifyListeners();
+    _scheduleNearestTimer();
+  }
+
+  /// Public hook so the app's lifecycle observer can trigger a purge on
+  /// every foreground resume without exposing the private method.
+  Future<void> onAppResumed() => _purgeExpiredReminders();
 
   // ---- In-app due-timer helpers --------------------------------
 

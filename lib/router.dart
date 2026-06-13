@@ -49,12 +49,11 @@ final GoRouter router = GoRouter(
                   path: 'editor',
                   parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
-                    final extra = state.extra as (Reminder?, Offset, String?);
+                    final extra = state.extra as (Reminder?, Offset);
                     return CustomTransitionPage(
                       key: state.pageKey,
                       child: ReminderEditorPage(
                         initial: extra.$1,
-                        prefillImagePath: extra.$3,
                       ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {

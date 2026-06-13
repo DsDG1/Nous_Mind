@@ -58,8 +58,25 @@ class NotificationSettingsPage extends StatelessWidget {
                       subtitle: _formatRange(settings.quietHours),
                       leading: const Icon(Icons.schedule_outlined),
                       onTap: settings.quietHoursEnabled
-                          ? () => _editQuietHours(context, vm, settings.quietHours)
+                          ? () => _editQuietHours(
+                              context,
+                              vm,
+                              settings.quietHours,
+                            )
                           : null,
+                    ),
+                  ],
+                ),
+                SettingsSection(
+                  title: '清理',
+                  icon: Icons.cleaning_services_outlined,
+                  children: <Widget>[
+                    SwitchListTile(
+                      title: const Text('已触发的提醒 24 小时后自动删除'),
+                      subtitle: const Text('到达提醒时间后过一天自动清理'),
+                      secondary: const Icon(Icons.delete_sweep_outlined),
+                      value: settings.autoDeleteAfter24h,
+                      onChanged: vm.setAutoDeleteAfter24h,
                     ),
                   ],
                 ),
