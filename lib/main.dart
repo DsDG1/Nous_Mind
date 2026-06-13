@@ -8,6 +8,7 @@ import 'services/inspiration_image_store.dart';
 import 'services/inspiration_storage.dart';
 import 'services/notification_service.dart';
 import 'services/reminder_storage.dart';
+import 'services/screenshot_service.dart';
 import 'services/settings_storage.dart';
 import 'viewmodels/inspirations_view_model.dart';
 import 'viewmodels/reminders_view_model.dart';
@@ -23,6 +24,7 @@ Future<void> main() async {
   final settingsStorage = SettingsStorage(prefs);
   final notifications = NotificationService();
   await notifications.init(onTapNotification: () => router.go('/'));
+  final screenshotService = ScreenshotService(imageStore);
   runApp(
     RemindersApp(
       reminderStorage: reminderStorage,
@@ -30,6 +32,7 @@ Future<void> main() async {
       imageStore: imageStore,
       notifications: notifications,
       settingsStorage: settingsStorage,
+      screenshotService: screenshotService,
     ),
   );
 }
@@ -42,6 +45,7 @@ class RemindersApp extends StatelessWidget {
     required this.imageStore,
     required this.notifications,
     required this.settingsStorage,
+    required this.screenshotService,
   });
 
   final ReminderStorage reminderStorage;
@@ -49,6 +53,7 @@ class RemindersApp extends StatelessWidget {
   final InspirationImageStore imageStore;
   final NotificationService notifications;
   final SettingsStorage settingsStorage;
+  final ScreenshotService screenshotService;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +68,7 @@ class RemindersApp extends StatelessWidget {
               reminderStorage,
               notifications,
               context.read<SettingsViewModel>(),
+              imageStore,
             );
             vm.onReminderDue = (reminder) {
               final navigatorState = rootNavigatorKey.currentState;
@@ -86,28 +92,67 @@ class RemindersApp extends StatelessWidget {
         ),
         Provider<InspirationImageStore>.value(value: imageStore),
         Provider<NotificationService>.value(value: notifications),
+        Provider<ScreenshotService>.value(value: screenshotService),
       ],
-      child: Consumer<SettingsViewModel>(
-        builder: (context, vm, _) {
-          final seed = vm.settings.seedColor.color;
-          return MaterialApp.router(
-            title: '提醒事项',
-            themeMode: vm.settings.themeMode,
-            theme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(seedColor: seed),
+      child: _AppWithLifecycle(screenshotService: screenshotService),
+    );
+  }
+}
+
+/// Listens for app resume events to check for pending screenshots captured
+/// by the native TileService / OverlayService flow.
+class _AppWithLifecycle extends StatefulWidget {
+  const _AppWithLifecycle({required this.screenshotService});
+
+  final ScreenshotService screenshotService;
+
+  @override
+  State<_AppWithLifecycle> createState() => _AppWithLifecycleState();
+}
+
+class _AppWithLifecycleState extends State<_AppWithLifecycle>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      widget.screenshotService.checkPendingScreenshot();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<SettingsViewModel>(
+      builder: (context, vm, _) {
+        final seed = vm.settings.seedColor.color;
+        return MaterialApp.router(
+          title: '提醒事项',
+          themeMode: vm.settings.themeMode,
+          theme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(seedColor: seed),
+          ),
+          darkTheme: ThemeData(
+            useMaterial3: true,
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: seed,
+              brightness: Brightness.dark,
             ),
-            darkTheme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: seed,
-                brightness: Brightness.dark,
-              ),
-            ),
-            routerConfig: router,
-          );
-        },
-      ),
+          ),
+          routerConfig: router,
+        );
+      },
     );
   }
 }

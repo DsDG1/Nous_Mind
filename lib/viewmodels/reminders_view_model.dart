@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 import '../models/reminder.dart';
+import '../services/inspiration_image_store.dart';
 import '../services/notification_service.dart';
 import '../services/reminder_storage.dart';
 import 'settings_view_model.dart';
@@ -22,13 +23,19 @@ import 'settings_view_model.dart';
 /// [Reminder.reminderTime]. This is used to show an in-app popup regardless
 /// of which tab is active.
 class RemindersViewModel extends ChangeNotifier {
-  RemindersViewModel(this._storage, this._notifications, this._settings) {
+  RemindersViewModel(
+    this._storage,
+    this._notifications,
+    this._settings,
+    this._imageStore,
+  ) {
     _bootstrap();
   }
 
   final ReminderStorage _storage;
   final NotificationService _notifications;
   final SettingsViewModel _settings;
+  final InspirationImageStore _imageStore;
   final List<Reminder> _reminders = <Reminder>[];
 
   bool _loaded = false;
@@ -76,11 +83,13 @@ class RemindersViewModel extends ChangeNotifier {
   Future<void> add({
     required String title,
     required DateTime reminderTime,
+    String? imagePath,
   }) async {
     final reminder = Reminder(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       title: title,
       reminderTime: reminderTime,
+      imagePath: imagePath,
     );
     _reminders.add(reminder);
     await _storage.saveAll(_reminders);
@@ -105,16 +114,21 @@ class RemindersViewModel extends ChangeNotifier {
   }
 
   /// Removes the reminder with [id] from the list and persists the change.
+  /// Also deletes the associated image file if present.
   Future<void> delete(String id) async {
-    final removed = _reminders.length;
-    _reminders.removeWhere((r) => r.id == id);
-    if (_reminders.length == removed) {
+    final index = _reminders.indexWhere((r) => r.id == id);
+    if (index == -1) {
       return;
     }
+    final imagePath = _reminders[index].imagePath;
+    _reminders.removeAt(index);
     await _storage.saveAll(_reminders);
     notifyListeners();
     await _notifications.cancelReminder(id);
     _scheduleNearestTimer();
+    if (imagePath != null) {
+      await _imageStore.deleteByPath(imagePath);
+    }
   }
 
   /// Wraps [NotificationService.scheduleReminder] so that a permission

@@ -30,7 +30,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
             ),
           )
         : Offset.zero;
-    await context.push('/editor', extra: (existing, fabPosition));
+    await context.push('/editor', extra: (existing, fabPosition, null));
   }
 
   Future<void> _deleteWithFeedback(
