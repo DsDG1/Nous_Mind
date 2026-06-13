@@ -16,8 +16,8 @@ class CircularRevealClipper extends CustomClipper<Path> {
   final double radius;
 
   @override
-  Path getClip(Size size) => Path()
-    ..addOval(Rect.fromCircle(center: center, radius: radius));
+  Path getClip(Size size) =>
+      Path()..addOval(Rect.fromCircle(center: center, radius: radius));
 
   @override
   bool shouldReclip(CircularRevealClipper oldClipper) =>

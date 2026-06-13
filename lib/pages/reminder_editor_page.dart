@@ -73,8 +73,9 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     } on PlatformException catch (error, stackTrace) {
       developer.log('Image pick failed', error: error, stackTrace: stackTrace);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('获取图片失败')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('获取图片失败')));
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -131,10 +132,18 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     }
 
     if (existing == null) {
-      await viewModel.add(title: title, reminderTime: time, imagePath: newImagePath);
+      await viewModel.add(
+        title: title,
+        reminderTime: time,
+        imagePath: newImagePath,
+      );
     } else {
       await viewModel.update(
-        existing.copyWith(title: title, reminderTime: time, imagePath: newImagePath),
+        existing.copyWith(
+          title: title,
+          reminderTime: time,
+          imagePath: newImagePath,
+        ),
       );
       if (previousImagePath != null && previousImagePath != newImagePath) {
         await store.deleteByPath(previousImagePath);
@@ -170,7 +179,9 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
                 children: <Widget>[
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _picking ? null : () => _pickImage(ImageSource.gallery),
+                      onPressed: _picking
+                          ? null
+                          : () => _pickImage(ImageSource.gallery),
                       icon: const Icon(Icons.photo_library_outlined),
                       label: const Text('相册'),
                     ),
@@ -178,7 +189,9 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: _picking ? null : () => _pickImage(ImageSource.camera),
+                      onPressed: _picking
+                          ? null
+                          : () => _pickImage(ImageSource.camera),
                       icon: const Icon(Icons.photo_camera_outlined),
                       label: const Text('拍照'),
                     ),

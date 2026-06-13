@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../models/reminder.dart';
 import '../services/inspiration_image_store.dart';
 import '../services/notification_service.dart';
-import '../services/reminder_storage.dart';
+import '../services/reminder_repository.dart';
 import 'settings_view_model.dart';
 
 /// Holds the in-memory list of reminders, persists every change, and keeps
@@ -24,7 +24,7 @@ import 'settings_view_model.dart';
 /// of which tab is active.
 class RemindersViewModel extends ChangeNotifier {
   RemindersViewModel(
-    this._storage,
+    this._repository,
     this._notifications,
     this._settings,
     this._imageStore,
@@ -32,7 +32,7 @@ class RemindersViewModel extends ChangeNotifier {
     _bootstrap();
   }
 
-  final ReminderStorage _storage;
+  final ReminderRepository _repository;
   final NotificationService _notifications;
   final SettingsViewModel _settings;
   final InspirationImageStore _imageStore;
@@ -58,7 +58,7 @@ class RemindersViewModel extends ChangeNotifier {
   }
 
   Future<void> _bootstrap() async {
-    final loaded = await _storage.loadAll();
+    final loaded = await _repository.getAll();
     _reminders
       ..clear()
       ..addAll(loaded);
@@ -95,21 +95,21 @@ class RemindersViewModel extends ChangeNotifier {
       imagePath: imagePath,
     );
     _reminders.add(reminder);
-    await _storage.saveAll(_reminders);
+    await _repository.insert(reminder);
     notifyListeners();
     await _notifications.requestPermissions();
     await _safeSchedule(reminder);
     _scheduleNearestTimer();
   }
 
-  /// Replaces the reminder with the same [Reminder.id] and persists the list.
+  /// Replaces the reminder with the same [Reminder.id] and persists it.
   Future<void> update(Reminder reminder) async {
     final index = _reminders.indexWhere((r) => r.id == reminder.id);
     if (index == -1) {
       return;
     }
     _reminders[index] = reminder;
-    await _storage.saveAll(_reminders);
+    await _repository.update(reminder);
     notifyListeners();
     await _notifications.cancelReminder(reminder.id);
     await _safeSchedule(reminder);
@@ -125,7 +125,7 @@ class RemindersViewModel extends ChangeNotifier {
     }
     final imagePath = _reminders[index].imagePath;
     _reminders.removeAt(index);
-    await _storage.saveAll(_reminders);
+    await _repository.delete(id);
     notifyListeners();
     await _notifications.cancelReminder(id);
     _scheduleNearestTimer();
@@ -169,7 +169,7 @@ class RemindersViewModel extends ChangeNotifier {
       reminderTime: DateTime.now().add(duration),
     );
     _reminders[index] = snoozed;
-    await _storage.saveAll(_reminders);
+    await _repository.update(snoozed);
     notifyListeners();
     await _notifications.cancelReminder(id);
     await _safeSchedule(snoozed);
@@ -215,10 +215,9 @@ class RemindersViewModel extends ChangeNotifier {
           );
         }
       }
+      await _repository.delete(reminder.id);
     }
-    final expiredIds = expired.map((r) => r.id).toSet();
-    _reminders.removeWhere((r) => expiredIds.contains(r.id));
-    await _storage.saveAll(_reminders);
+    _reminders.removeWhere((r) => expired.any((e) => e.id == r.id));
     notifyListeners();
     _scheduleNearestTimer();
   }
@@ -226,6 +225,34 @@ class RemindersViewModel extends ChangeNotifier {
   /// Public hook so the app's lifecycle observer can trigger a purge on
   /// every foreground resume without exposing the private method.
   Future<void> onAppResumed() => _purgeExpiredReminders();
+
+  /// Bulk-add helper used by the AI assistant flow. All drafts land in
+  /// the list, each OS notification is scheduled, then a single batch
+  /// insert keeps the persistence path efficient.
+  ///
+  /// Returns the number of reminders actually added.
+  Future<int> addMultiple(
+    List<({String title, DateTime reminderTime})> drafts,
+  ) async {
+    if (drafts.isEmpty) return 0;
+    final baseId = DateTime.now().microsecondsSinceEpoch;
+    final newcomers = <Reminder>[];
+    for (var i = 0; i < drafts.length; i++) {
+      final draft = drafts[i];
+      final reminder = Reminder(
+        id: '$baseId-$i',
+        title: draft.title,
+        reminderTime: draft.reminderTime,
+      );
+      _reminders.add(reminder);
+      newcomers.add(reminder);
+      await _safeSchedule(reminder);
+    }
+    await _repository.insertAll(newcomers);
+    notifyListeners();
+    _scheduleNearestTimer();
+    return drafts.length;
+  }
 
   // ---- In-app due-timer helpers --------------------------------
 

@@ -3,11 +3,13 @@ import 'package:go_router/go_router.dart';
 
 import 'models/inspiration.dart';
 import 'models/reminder.dart';
+import 'pages/ai_assistant_page.dart';
 import 'pages/app_shell.dart';
 import 'pages/inspiration_editor_page.dart';
 import 'pages/inspirations_home_page.dart';
 import 'pages/reminder_editor_page.dart';
 import 'pages/reminders_home_page.dart';
+import 'pages/settings/ai_settings_page.dart';
 import 'pages/settings/appearance_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings_page.dart';
@@ -52,19 +54,31 @@ final GoRouter router = GoRouter(
                     final extra = state.extra as (Reminder?, Offset);
                     return CustomTransitionPage(
                       key: state.pageKey,
-                      child: ReminderEditorPage(
-                        initial: extra.$1,
-                      ),
+                      child: ReminderEditorPage(initial: extra.$1),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
-                        return CircularRevealTransition(
-                          animation: animation,
-                          center: extra.$2,
-                          child: child,
-                        );
-                      },
+                            return CircularRevealTransition(
+                              animation: animation,
+                              center: extra.$2,
+                              child: child,
+                            );
+                          },
                     );
                   },
+                ),
+                GoRoute(
+                  path: 'assistant',
+                  parentNavigatorKey: rootNavigatorKey,
+                  pageBuilder: (context, state) => CustomTransitionPage(
+                    key: state.pageKey,
+                    child: const AiAssistantPage(),
+                    transitionsBuilder: (_, animation, _, child) =>
+                        CircularRevealTransition(
+                          animation: animation,
+                          center: const Offset(0.5, 0.5),
+                          child: child,
+                        ),
+                  ),
                 ),
               ],
             ),
@@ -102,6 +116,10 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'notification',
                   builder: (context, state) => const NotificationSettingsPage(),
+                ),
+                GoRoute(
+                  path: 'ai',
+                  builder: (context, state) => const AiSettingsPage(),
                 ),
               ],
             ),

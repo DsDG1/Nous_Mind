@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/inspiration.dart';
 import '../services/inspiration_image_store.dart';
-import '../services/inspiration_storage.dart';
+import '../services/inspiration_repository.dart';
 
 /// Holds the in-memory list of inspirations and persists every change.
 ///
@@ -10,11 +10,11 @@ import '../services/inspiration_storage.dart';
 /// notifies listeners after each mutation. Storage writes are awaited so
 /// the on-disk state matches the in-memory state when the call returns.
 class InspirationsViewModel extends ChangeNotifier {
-  InspirationsViewModel(this._storage, this._imageStore) {
+  InspirationsViewModel(this._repository, this._imageStore) {
     _bootstrap();
   }
 
-  final InspirationStorage _storage;
+  final InspirationRepository _repository;
   final InspirationImageStore _imageStore;
   final List<Inspiration> _items = <Inspiration>[];
 
@@ -25,7 +25,7 @@ class InspirationsViewModel extends ChangeNotifier {
   List<Inspiration> get inspirations => List.unmodifiable(_items);
 
   Future<void> _bootstrap() async {
-    final loaded = await _storage.loadAll();
+    final loaded = await _repository.getAll();
     _items
       ..clear()
       ..addAll(loaded)
@@ -46,13 +46,13 @@ class InspirationsViewModel extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     _items.insert(0, inspiration);
-    await _storage.saveAll(_items);
+    await _repository.insert(inspiration);
     notifyListeners();
     return inspiration;
   }
 
   /// Replaces the inspiration with the same [Inspiration.id] and persists
-  /// the list. Does not delete any old image file — callers should compare
+  /// it. Does not delete any old image file — callers should compare
   /// the previous and new [Inspiration.imagePath] and call
   /// [InspirationImageStore.deleteByPath] for the stale path.
   Future<void> update(Inspiration inspiration) async {
@@ -62,7 +62,7 @@ class InspirationsViewModel extends ChangeNotifier {
     }
     _items[index] = inspiration;
     _items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    await _storage.saveAll(_items);
+    await _repository.update(inspiration);
     notifyListeners();
   }
 
@@ -75,7 +75,16 @@ class InspirationsViewModel extends ChangeNotifier {
     }
     final removed = _items.removeAt(index);
     await _imageStore.deleteByPath(removed.imagePath);
-    await _storage.saveAll(_items);
+    await _repository.delete(id);
     notifyListeners();
+  }
+
+  /// Searches inspirations whose text matches [query] using FTS5.
+  /// Returns results sorted by relevance.
+  Future<List<Inspiration>> search(String query) async {
+    if (query.trim().isEmpty) {
+      return _items.toList();
+    }
+    return _repository.search(query.trim());
   }
 }

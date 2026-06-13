@@ -30,13 +30,15 @@ class AppearanceSettingsPage extends StatelessWidget {
                       title: '主题模式',
                       subtitle: themeModeLabel(settings.themeMode),
                       leading: const Icon(Icons.brightness_6_outlined),
-                      onTap: () => _pickThemeMode(context, vm, settings.themeMode),
+                      onTap: () =>
+                          _pickThemeMode(context, vm, settings.themeMode),
                     ),
                     SettingsTile(
                       title: '主题色',
                       subtitle: appSeedColorLabel(settings.seedColor),
                       leading: _ColorSwatch(color: settings.seedColor.color),
-                      onTap: () => _pickSeedColor(context, vm, settings.seedColor),
+                      onTap: () =>
+                          _pickSeedColor(context, vm, settings.seedColor),
                     ),
                   ],
                 ),

@@ -29,7 +29,9 @@ class SettingsPage extends StatelessWidget {
                     SettingsTile(
                       title: '外观',
                       subtitle: _appearanceSubtitle(settings),
-                      leading: _SeedColorLeading(color: settings.seedColor.color),
+                      leading: _SeedColorLeading(
+                        color: settings.seedColor.color,
+                      ),
                       onTap: () => context.push('/settings/appearance'),
                     ),
                     SettingsTile(
@@ -37,6 +39,12 @@ class SettingsPage extends StatelessWidget {
                       subtitle: _notificationSubtitle(settings),
                       leading: const Icon(Icons.notifications_outlined),
                       onTap: () => context.push('/settings/notification'),
+                    ),
+                    SettingsTile(
+                      title: 'AI 助手',
+                      subtitle: settings.aiApiKey == null ? '未配置' : '已配置',
+                      leading: const Icon(Icons.auto_awesome_outlined),
+                      onTap: () => context.push('/settings/ai'),
                     ),
                   ],
                 ),

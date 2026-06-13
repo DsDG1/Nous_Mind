@@ -119,8 +119,8 @@ class NotificationService {
     final base = reminder.reminderTime;
     final tzNow = tz.TZDateTime.now(tz.local);
     final tzBase = tz.TZDateTime.from(base, tz.local);
-    final tzTarget = quietHours != null &&
-            quietHours.contains(TimeOfDay.fromDateTime(base))
+    final tzTarget =
+        quietHours != null && quietHours.contains(TimeOfDay.fromDateTime(base))
         ? tz.TZDateTime.from(quietHours.pushPast(base), tz.local)
         : tzBase;
     if (tzTarget.isBefore(tzNow)) {

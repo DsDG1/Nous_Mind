@@ -53,4 +53,18 @@ class Inspiration {
     imagePath: json['image_path'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
   );
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'text': text,
+    'created_at': createdAt.toIso8601String(),
+    'image_path': imagePath,
+  };
+
+  factory Inspiration.fromMap(Map<String, dynamic> map) => Inspiration(
+    id: map['id'] as String,
+    text: map['text'] as String,
+    imagePath: map['image_path'] as String?,
+    createdAt: DateTime.parse(map['created_at'] as String),
+  );
 }

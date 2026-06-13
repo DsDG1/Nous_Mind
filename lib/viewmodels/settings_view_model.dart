@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../models/app_settings.dart';
-import '../services/settings_storage.dart';
+import '../services/settings_repository.dart';
 
 /// Owns the in-memory [AppSettings] and writes every mutation through to
-/// [SettingsStorage] before notifying listeners. The view model is provided
-/// app-wide so a single instance backs the MaterialApp theme and the
-/// settings subpages.
+/// [SettingsRepository] before notifying listeners. The view model is
+/// provided app-wide so a single instance backs the MaterialApp theme and
+/// the settings subpages.
 class SettingsViewModel extends ChangeNotifier {
-  SettingsViewModel(this._storage) : _settings = _storage.load();
+  SettingsViewModel({
+    required this._repository,
+    required AppSettings initialSettings,
+  }) : _settings = initialSettings;
 
-  final SettingsStorage _storage;
+  final SettingsRepository _repository;
   AppSettings _settings;
 
   /// Current settings snapshot. Always non-null.
@@ -22,7 +25,7 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> _update(AppSettings next) async {
     _settings = next;
     notifyListeners();
-    await _storage.save(next);
+    await _repository.save(next);
   }
 
   Future<void> setThemeMode(ThemeMode mode) =>
@@ -45,4 +48,12 @@ class SettingsViewModel extends ChangeNotifier {
 
   Future<void> setAutoDeleteAfter24h(bool value) =>
       _update(_settings.copyWith(autoDeleteAfter24h: value));
+
+  /// Persists the AI assistant API key. Whitespace-only values and `null`
+  /// both clear the key, so the storage layer never sees a blank string.
+  Future<void> setAiApiKey(String? value) => _update(
+    _settings.copyWith(
+      aiApiKey: (value == null || value.trim().isEmpty) ? null : value.trim(),
+    ),
+  );
 }

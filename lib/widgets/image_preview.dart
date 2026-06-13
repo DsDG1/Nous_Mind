@@ -8,11 +8,7 @@ import 'package:flutter/material.dart';
 /// displays the image at that path. If [onRemove] is non-null a small
 /// floating close button is rendered over the top-right corner.
 class ImagePreview extends StatelessWidget {
-  const ImagePreview({
-    super.key,
-    required this.imagePath,
-    this.onRemove,
-  });
+  const ImagePreview({super.key, required this.imagePath, this.onRemove});
 
   final String? imagePath;
   final VoidCallback? onRemove;

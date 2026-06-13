@@ -1,14 +1,20 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:nested/nested.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'models/app_settings.dart';
 import 'router.dart';
+import 'services/ai_analyzer.dart';
+import 'services/database.dart';
 import 'services/inspiration_image_store.dart';
-import 'services/inspiration_storage.dart';
+import 'services/inspiration_repository.dart';
 import 'services/notification_service.dart';
-import 'services/reminder_storage.dart';
-import 'services/settings_storage.dart';
+import 'services/reminder_repository.dart';
+import 'services/settings_repository.dart';
+import 'viewmodels/ai_assist_view_model.dart';
 import 'viewmodels/inspirations_view_model.dart';
 import 'viewmodels/reminders_view_model.dart';
 import 'viewmodels/settings_view_model.dart';
@@ -16,39 +22,70 @@ import 'widgets/reminder_popup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final prefs = await SharedPreferences.getInstance();
-  final reminderStorage = ReminderStorage(prefs);
-  final inspirationStorage = InspirationStorage(prefs);
+  AppDatabase? database;
+  try {
+    database = await AppDatabase.open();
+  } on Exception catch (error, stackTrace) {
+    developer.log(
+      'Failed to open database',
+      error: error,
+      stackTrace: stackTrace,
+    );
+    runApp(const _DatabaseErrorApp());
+    return;
+  }
+  final settingsRepository = SettingsRepository(database);
+  final initialSettings = await settingsRepository.load();
+  final reminderRepository = ReminderRepository(database);
+  final inspirationRepository = InspirationRepository(database);
   final imageStore = await InspirationImageStore.create();
-  final settingsStorage = SettingsStorage(prefs);
   final notifications = NotificationService();
   await notifications.init(onTapNotification: () => router.go('/'));
+  final timezone = await _readTimezone();
   runApp(
     RemindersApp(
-      reminderStorage: reminderStorage,
-      inspirationStorage: inspirationStorage,
+      settingsRepository: settingsRepository,
+      initialSettings: initialSettings,
+      reminderRepository: reminderRepository,
+      inspirationRepository: inspirationRepository,
       imageStore: imageStore,
       notifications: notifications,
-      settingsStorage: settingsStorage,
+      aiAnalyzer: DeepSeekAnalyzer(),
+      timezone: timezone,
     ),
   );
+}
+
+Future<String> _readTimezone() async {
+  try {
+    final info = await FlutterTimezone.getLocalTimezone();
+    return info.identifier;
+  } on Exception {
+    return 'UTC';
+  }
 }
 
 class RemindersApp extends StatefulWidget {
   const RemindersApp({
     super.key,
-    required this.reminderStorage,
-    required this.inspirationStorage,
+    required this.settingsRepository,
+    required this.initialSettings,
+    required this.reminderRepository,
+    required this.inspirationRepository,
     required this.imageStore,
     required this.notifications,
-    required this.settingsStorage,
+    required this.aiAnalyzer,
+    required this.timezone,
   });
 
-  final ReminderStorage reminderStorage;
-  final InspirationStorage inspirationStorage;
+  final SettingsRepository settingsRepository;
+  final AppSettings initialSettings;
+  final ReminderRepository reminderRepository;
+  final InspirationRepository inspirationRepository;
   final InspirationImageStore imageStore;
   final NotificationService notifications;
-  final SettingsStorage settingsStorage;
+  final AiAnalyzer aiAnalyzer;
+  final String timezone;
 
   @override
   State<RemindersApp> createState() => _RemindersAppState();
@@ -88,12 +125,15 @@ class _RemindersAppState extends State<RemindersApp>
     return MultiProvider(
       providers: <SingleChildWidget>[
         ChangeNotifierProvider<SettingsViewModel>(
-          create: (_) => SettingsViewModel(widget.settingsStorage),
+          create: (_) => SettingsViewModel(
+            repository: widget.settingsRepository,
+            initialSettings: widget.initialSettings,
+          ),
         ),
         ChangeNotifierProvider<RemindersViewModel>(
           create: (context) {
             final vm = RemindersViewModel(
-              widget.reminderStorage,
+              widget.reminderRepository,
               widget.notifications,
               context.read<SettingsViewModel>(),
               widget.imageStore,
@@ -115,10 +155,14 @@ class _RemindersAppState extends State<RemindersApp>
         ),
         ChangeNotifierProvider<InspirationsViewModel>(
           create: (_) => InspirationsViewModel(
-            widget.inspirationStorage,
+            widget.inspirationRepository,
             widget.imageStore,
           ),
         ),
+        ChangeNotifierProvider<AiAssistViewModel>(
+          create: (_) => AiAssistViewModel(widget.aiAnalyzer),
+        ),
+        Provider<AiAnalyzer>.value(value: widget.aiAnalyzer),
         Provider<InspirationImageStore>.value(value: widget.imageStore),
         Provider<NotificationService>.value(value: widget.notifications),
       ],
@@ -142,6 +186,41 @@ class _RemindersAppState extends State<RemindersApp>
             routerConfig: router,
           );
         },
+      ),
+    );
+  }
+}
+
+class _DatabaseErrorApp extends StatelessWidget {
+  const _DatabaseErrorApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: '提醒事项',
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.storage, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  '数据库初始化失败',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '请重启应用。如问题持续，请卸载后重新安装。',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

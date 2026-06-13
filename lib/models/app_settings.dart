@@ -131,7 +131,7 @@ class SnoozeDuration {
 }
 
 /// Immutable snapshot of the user's preferences. Mutations are funneled
-/// through [copyWith] and round-trip through JSON for [SettingsStorage].
+/// through [copyWith] and round-trip through JSON for the database.
 class AppSettings {
   const AppSettings({
     this.themeMode = ThemeMode.system,
@@ -141,6 +141,7 @@ class AppSettings {
     this.quietHours = const QuietHoursWindow(),
     this.snoozeDuration = const SnoozeDuration(),
     this.autoDeleteAfter24h = true,
+    this.aiApiKey,
   });
 
   final ThemeMode themeMode;
@@ -155,6 +156,12 @@ class AppSettings {
   /// resume. Anchored to scheduled time, not creation or fire time.
   final bool autoDeleteAfter24h;
 
+  /// API key for the AI assistant backend. `null` when the user has not
+  /// configured one. Whitespace-only values are normalized to `null` at
+  /// both write time and read time, so the storage layer never sees a
+  /// blank string.
+  final String? aiApiKey;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     AppSeedColor? seedColor,
@@ -163,6 +170,7 @@ class AppSettings {
     QuietHoursWindow? quietHours,
     SnoozeDuration? snoozeDuration,
     bool? autoDeleteAfter24h,
+    String? aiApiKey,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -172,6 +180,7 @@ class AppSettings {
       quietHours: quietHours ?? this.quietHours,
       snoozeDuration: snoozeDuration ?? this.snoozeDuration,
       autoDeleteAfter24h: autoDeleteAfter24h ?? this.autoDeleteAfter24h,
+      aiApiKey: aiApiKey ?? this.aiApiKey,
     );
   }
 
@@ -183,6 +192,7 @@ class AppSettings {
     'quiet_hours': quietHours.toJson(),
     'snooze_duration': snoozeDuration.toJson(),
     'auto_delete_after_24h': autoDeleteAfter24h,
+    if (aiApiKey != null) 'ai_api_key': aiApiKey,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -220,7 +230,14 @@ class AppSettings {
             const <String, dynamic>{},
       ),
       autoDeleteAfter24h: (json['auto_delete_after_24h'] as bool?) ?? true,
+      aiApiKey: _normalizeApiKey(json['ai_api_key']),
     );
+  }
+
+  static String? _normalizeApiKey(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 }
 
