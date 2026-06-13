@@ -101,10 +101,7 @@ class NotificationService {
   /// Schedules a notification for [reminder.reminderTime], adjusted by
   /// the user's notification preferences:
   ///
-  /// * [leadTime] — the notification fires `reminderTime - leadTime` so
-  ///   users get a heads-up. A zero duration preserves the legacy
-  ///   "fire exactly at the time" behaviour.
-  /// * [quietHours] — when supplied and the adjusted time falls inside
+  /// * [quietHours] — when supplied and the time falls inside
   ///   the window, the trigger is pushed past the window's end. Pass null
   ///   to disable.
   /// * [vibrationEnabled] — propagated to [AndroidNotificationDetails].
@@ -113,14 +110,13 @@ class NotificationService {
   /// the reminder is still saved, but no notification will fire.
   Future<void> scheduleReminder(
     Reminder reminder, {
-    Duration leadTime = Duration.zero,
     bool vibrationEnabled = true,
     QuietHoursWindow? quietHours,
   }) async {
     if (reminder.reminderTime.isBefore(DateTime.now())) {
       return;
     }
-    final base = reminder.reminderTime.subtract(leadTime);
+    final base = reminder.reminderTime;
     final tzNow = tz.TZDateTime.now(tz.local);
     final tzBase = tz.TZDateTime.from(base, tz.local);
     final tzTarget = quietHours != null &&
@@ -130,7 +126,7 @@ class NotificationService {
     if (tzTarget.isBefore(tzNow)) {
       return;
     }
-    final body = _composeBody(reminder.title, leadTime);
+    final body = _composeBody(reminder.title);
     await _plugin.zonedSchedule(
       _idFromReminderId(reminder.id),
       reminder.title,
@@ -143,16 +139,9 @@ class NotificationService {
     );
   }
 
-  /// Body text for a scheduled reminder. With a non-zero lead time the
-  /// body becomes "{N} 分钟后到点" so the user understands why the
-  /// notification is arriving early; otherwise the original suffix is
-  /// used.
-  String _composeBody(String title, Duration leadTime) {
-    if (leadTime <= Duration.zero) {
-      return _bodySuffix;
-    }
-    final minutes = leadTime.inMinutes;
-    return '$minutes 分钟后到点';
+  /// Body text for a scheduled reminder.
+  String _composeBody(String title) {
+    return _bodySuffix;
   }
 
   /// Cancels the scheduled notification for [reminderId] (if any).

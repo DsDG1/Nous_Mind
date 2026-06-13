@@ -54,26 +54,25 @@ Future<void> showReminderPopup({
                       ),
                     ),
                     const SizedBox(height: 32),
-                    Row(
-                      children: <Widget>[
-                        if (onSnooze != null)
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () {
-                                onSnooze();
-                                Navigator.of(context).pop();
-                              },
-                              child: const Text('稍后提醒（5分钟）'),
-                            ),
-                          ),
-                        if (onSnooze != null) const SizedBox(width: 12),
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('确定'),
-                          ),
+                    if (onSnooze != null) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: () {
+                            onSnooze();
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('稍后提醒（5分钟）'),
                         ),
-                      ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('确定'),
+                      ),
                     ),
                   ],
                 ),

@@ -40,9 +40,6 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> setQuietHours(QuietHoursWindow window) =>
       _update(_settings.copyWith(quietHours: window));
 
-  Future<void> setLeadTime(LeadTime leadTime) =>
-      _update(_settings.copyWith(leadTime: leadTime));
-
   Future<void> setSnoozeDuration(SnoozeDuration snooze) =>
       _update(_settings.copyWith(snoozeDuration: snooze));
 }

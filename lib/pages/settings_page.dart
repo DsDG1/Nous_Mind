@@ -61,10 +61,6 @@ class SettingsPage extends StatelessWidget {
     if (settings.quietHoursEnabled) {
       parts.add('免打扰');
     }
-    final leadMinutes = settings.leadTime.duration.inMinutes;
-    if (leadMinutes > 0) {
-      parts.add('提前 $leadMinutes 分钟');
-    }
     return parts.isEmpty ? '默认设置' : parts.join(' · ');
   }
 }

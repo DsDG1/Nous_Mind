@@ -16,64 +16,6 @@ enum AppSeedColor {
   final Color color;
 }
 
-/// Built-in lead-time buckets plus a user-supplied custom duration.
-enum LeadTimePreset { off, fiveMinutes, fifteenMinutes, thirtyMinutes, custom }
-
-/// How long before [Reminder.reminderTime] a notification should fire.
-///
-/// When [preset] is [LeadTimePreset.custom] the value comes from [custom];
-/// otherwise it is a fixed bucket. The resolved duration is exposed by
-/// [duration].
-class LeadTime {
-  const LeadTime({
-    this.preset = LeadTimePreset.off,
-    this.custom = const Duration(minutes: 5),
-  });
-
-  final LeadTimePreset preset;
-  final Duration custom;
-
-  Duration get duration {
-    return switch (preset) {
-      LeadTimePreset.off => Duration.zero,
-      LeadTimePreset.fiveMinutes => const Duration(minutes: 5),
-      LeadTimePreset.fifteenMinutes => const Duration(minutes: 15),
-      LeadTimePreset.thirtyMinutes => const Duration(minutes: 30),
-      LeadTimePreset.custom => custom,
-    };
-  }
-
-  String get label {
-    final minutes = duration.inMinutes;
-    return minutes == 0 ? '不提前' : '提前 $minutes 分钟';
-  }
-
-  LeadTime copyWith({LeadTimePreset? preset, Duration? custom}) {
-    return LeadTime(
-      preset: preset ?? this.preset,
-      custom: custom ?? this.custom,
-    );
-  }
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'preset': preset.name,
-    'custom_minutes': custom.inMinutes,
-  };
-
-  factory LeadTime.fromJson(Map<String, dynamic> json) {
-    final presetName = json['preset'] as String?;
-    final preset = LeadTimePreset.values.firstWhere(
-      (p) => p.name == presetName,
-      orElse: () => LeadTimePreset.off,
-    );
-    final customMinutes = (json['custom_minutes'] as int?) ?? 5;
-    return LeadTime(
-      preset: preset,
-      custom: Duration(minutes: customMinutes.clamp(0, 24 * 60)),
-    );
-  }
-}
-
 /// A pair of [TimeOfDay] values describing a "do not disturb" window.
 ///
 /// [start] and [end] can straddle midnight (e.g. 22:00–08:00). When they
@@ -203,7 +145,6 @@ class AppSettings {
     this.vibrationEnabled = true,
     this.quietHoursEnabled = false,
     this.quietHours = const QuietHoursWindow(),
-    this.leadTime = const LeadTime(),
     this.snoozeDuration = const SnoozeDuration(),
   });
 
@@ -212,7 +153,6 @@ class AppSettings {
   final bool vibrationEnabled;
   final bool quietHoursEnabled;
   final QuietHoursWindow quietHours;
-  final LeadTime leadTime;
   final SnoozeDuration snoozeDuration;
 
   AppSettings copyWith({
@@ -221,7 +161,6 @@ class AppSettings {
     bool? vibrationEnabled,
     bool? quietHoursEnabled,
     QuietHoursWindow? quietHours,
-    LeadTime? leadTime,
     SnoozeDuration? snoozeDuration,
   }) {
     return AppSettings(
@@ -230,7 +169,6 @@ class AppSettings {
       vibrationEnabled: vibrationEnabled ?? this.vibrationEnabled,
       quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
       quietHours: quietHours ?? this.quietHours,
-      leadTime: leadTime ?? this.leadTime,
       snoozeDuration: snoozeDuration ?? this.snoozeDuration,
     );
   }
@@ -241,7 +179,6 @@ class AppSettings {
     'vibration_enabled': vibrationEnabled,
     'quiet_hours_enabled': quietHoursEnabled,
     'quiet_hours': quietHours.toJson(),
-    'lead_time': leadTime.toJson(),
     'snooze_duration': snoozeDuration.toJson(),
   };
 
@@ -273,10 +210,6 @@ class AppSettings {
       quietHoursEnabled: (json['quiet_hours_enabled'] as bool?) ?? false,
       quietHours: QuietHoursWindow.fromJson(
         (json['quiet_hours'] as Map<String, dynamic>?) ??
-            const <String, dynamic>{},
-      ),
-      leadTime: LeadTime.fromJson(
-        (json['lead_time'] as Map<String, dynamic>?) ??
             const <String, dynamic>{},
       ),
       snoozeDuration: SnoozeDuration.fromJson(

@@ -128,7 +128,6 @@ class RemindersViewModel extends ChangeNotifier {
     try {
       await _notifications.scheduleReminder(
         reminder,
-        leadTime: prefs.leadTime.duration,
         vibrationEnabled: prefs.vibrationEnabled,
         quietHours: prefs.quietHoursEnabled ? prefs.quietHours : null,
       );

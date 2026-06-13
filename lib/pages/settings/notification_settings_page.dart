@@ -10,9 +10,7 @@ import '../../widgets/settings_section.dart';
 
 /// Settings subpage for notification behavior.
 ///
-/// Hosts four groups: vibration, quiet hours, lead time, and a single
-/// "send a test notification" entry that lets the user verify their
-/// preferences end-to-end without waiting for a real reminder.
+/// Hosts vibration, quiet hours, and a "send test notification" entry.
 class NotificationSettingsPage extends StatelessWidget {
   const NotificationSettingsPage({super.key});
 
@@ -62,18 +60,6 @@ class NotificationSettingsPage extends StatelessWidget {
                       onTap: settings.quietHoursEnabled
                           ? () => _editQuietHours(context, vm, settings.quietHours)
                           : null,
-                    ),
-                  ],
-                ),
-                SettingsSection(
-                  title: '提前提醒',
-                  icon: Icons.access_time,
-                  children: <Widget>[
-                    SettingsTile(
-                      title: '提前时长',
-                      subtitle: settings.leadTime.label,
-                      leading: const Icon(Icons.timelapse_outlined),
-                      onTap: () => _pickLeadTime(context, vm, settings.leadTime),
                     ),
                   ],
                 ),
@@ -162,106 +148,5 @@ class NotificationSettingsPage extends StatelessWidget {
     await vm.setQuietHours(
       QuietHoursWindow(start: pickedStart, end: pickedEnd),
     );
-  }
-
-  Future<void> _pickLeadTime(
-    BuildContext context,
-    SettingsViewModel vm,
-    LeadTime current,
-  ) async {
-    const presets = <(LeadTimePreset, String)>[
-      (LeadTimePreset.off, '不提前'),
-      (LeadTimePreset.fiveMinutes, '提前 5 分钟'),
-      (LeadTimePreset.fifteenMinutes, '提前 15 分钟'),
-      (LeadTimePreset.thirtyMinutes, '提前 30 分钟'),
-      (LeadTimePreset.custom, '自定义...'),
-    ];
-    final selected = await showModalBottomSheet<LeadTimePreset>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: RadioGroup<LeadTimePreset>(
-            groupValue: current.preset,
-            onChanged: (value) => Navigator.of(ctx).pop(value),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (final (preset, label) in presets)
-                  RadioListTile<LeadTimePreset>(
-                    title: Text(label),
-                    value: preset,
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (selected == null) {
-      return;
-    }
-    if (selected == LeadTimePreset.custom) {
-      if (!context.mounted) {
-        return;
-      }
-      final minutes = await _pickCustomMinutes(context, current.custom);
-      if (minutes == null) {
-        return;
-      }
-      await vm.setLeadTime(
-        LeadTime(preset: LeadTimePreset.custom, custom: minutes),
-      );
-    } else {
-      await vm.setLeadTime(LeadTime(preset: selected));
-    }
-  }
-
-  Future<Duration?> _pickCustomMinutes(
-    BuildContext context,
-    Duration current,
-  ) async {
-    final controller = TextEditingController(
-      text: current.inMinutes.toString(),
-    );
-    final minutes = await showDialog<int>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('自定义提前时长'),
-          content: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: const InputDecoration(
-              suffixText: '分钟',
-              border: OutlineInputBorder(),
-            ),
-            autofocus: true,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final parsed = int.tryParse(controller.text.trim());
-                if (parsed == null || parsed < 0 || parsed > 24 * 60) {
-                  Navigator.of(ctx).pop();
-                  return;
-                }
-                Navigator.of(ctx).pop(parsed);
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
-    );
-    controller.dispose();
-    if (minutes == null) {
-      return null;
-    }
-    return Duration(minutes: minutes);
   }
 }
