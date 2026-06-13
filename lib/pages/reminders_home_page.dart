@@ -9,11 +9,45 @@ import '../widgets/reminder_list_item.dart';
 
 /// Home screen: shows all reminders, hosts the FAB to add a new one, and
 /// routes taps to the editor and left-swipes to delete.
-class RemindersHomePage extends StatelessWidget {
+class RemindersHomePage extends StatefulWidget {
   const RemindersHomePage({super.key});
 
+  @override
+  State<RemindersHomePage> createState() => _RemindersHomePageState();
+}
+
+class _RemindersHomePageState extends State<RemindersHomePage> {
+  final GlobalKey _fabKey = GlobalKey();
+
   Future<void> _openEditor(BuildContext context, Reminder? existing) async {
-    await context.push('/editor', extra: existing);
+    final fabRenderBox =
+        _fabKey.currentContext?.findRenderObject() as RenderBox?;
+    final fabPosition = fabRenderBox != null
+        ? fabRenderBox.localToGlobal(
+            Offset(
+              fabRenderBox.size.width / 2,
+              fabRenderBox.size.height / 2,
+            ),
+          )
+        : Offset.zero;
+    await context.push('/editor', extra: (existing, fabPosition));
+  }
+
+  Future<void> _deleteWithFeedback(
+    BuildContext context,
+    RemindersViewModel viewModel,
+    Reminder reminder,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await viewModel.delete(reminder.id);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('已删除「${reminder.title}」'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
@@ -49,27 +83,11 @@ class RemindersHomePage extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        key: _fabKey,
         onPressed: () => _openEditor(context, null),
         tooltip: '添加提醒',
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  Future<void> _deleteWithFeedback(
-    BuildContext context,
-    RemindersViewModel viewModel,
-    Reminder reminder,
-  ) async {
-    final messenger = ScaffoldMessenger.of(context);
-    await viewModel.delete(reminder.id);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('已删除「${reminder.title}」'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
   }
 }

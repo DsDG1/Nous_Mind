@@ -11,6 +11,7 @@ import 'pages/reminders_home_page.dart';
 import 'pages/settings/appearance_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings_page.dart';
+import 'widgets/circular_reveal_clip.dart';
 
 /// Navigator keys — separate per branch so each tab maintains its own
 /// navigation history, plus a root key for full-screen overlays (editors).
@@ -47,8 +48,21 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'editor',
                   parentNavigatorKey: _rootNavigatorKey,
-                  builder: (context, state) =>
-                      ReminderEditorPage(initial: state.extra as Reminder?),
+                  pageBuilder: (context, state) {
+                    final extra = state.extra as (Reminder?, Offset);
+                    return CustomTransitionPage(
+                      key: state.pageKey,
+                      child: ReminderEditorPage(initial: extra.$1),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                        return CircularRevealTransition(
+                          animation: animation,
+                          center: extra.$2,
+                          child: child,
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             ),
