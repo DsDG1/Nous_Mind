@@ -254,11 +254,16 @@ class _ChangelogVersion {
 /// shipping a new version; the rest of the page renders from here.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
-    version: '1.2.4',
+    version: '1.2.5',
     notes: <String>[
-      '升级多项第三方依赖至最新版，适配新版 API',
-      '修复 Android release 构建失败问题',
+      '新增本地中文 OCR 识别能力,可在「设置 → AI → 本地 OCR」启用,模型随 App 打包,离线可用,失败时自动回退到拉丁文识别',
+      '修复 AI 助手解析的提醒时间在非 UTC 时区下显示为 UTC 时间的错误,现在与设备本地时区一致',
+      '优化 AI 助手输入界面布局,文字输入框移至图片选择之后',
     ],
+  ),
+  _ChangelogVersion(
+    version: '1.2.4',
+    notes: <String>['升级多项第三方依赖至最新版，适配新版 API', '修复 Android release 构建失败问题'],
   ),
   _ChangelogVersion(
     version: '1.2.3',
