@@ -44,6 +44,13 @@ android {
 
     dependencies {
         coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+        // Bundled Chinese text recognition: the model ships inside
+        // the AAR, so the app does not need Google Play Services to
+        // download anything at runtime. The 16.0.x line is a
+        // self-contained library — the previous comment about
+        // NoClassDefFoundError described the older v1 unbundled
+        // artifact, not this one.
+        implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
     }
 }
 

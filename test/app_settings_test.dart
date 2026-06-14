@@ -23,5 +23,30 @@ void main() {
       expect(restored.aiAssistantEnabled, isTrue);
       expect(restored.aiApiKey, 'sk-x');
     });
+
+    test('defaults chineseOcrEnabled to false when key is absent', () {
+      final parsed = AppSettings.fromJson(const <String, dynamic>{});
+      expect(parsed.chineseOcrEnabled, isFalse);
+    });
+
+    test('round-trips chineseOcrEnabled with the rest of the settings', () {
+      const original = AppSettings(
+        aiAssistantEnabled: true,
+        aiApiKey: 'sk-x',
+        chineseOcrEnabled: true,
+      );
+      final restored = AppSettings.fromJson(original.toJson());
+      expect(restored.chineseOcrEnabled, isTrue);
+      expect(restored.aiAssistantEnabled, isTrue);
+      expect(restored.aiApiKey, 'sk-x');
+    });
+
+    test('copyWith only touches chineseOcrEnabled when asked', () {
+      const original = AppSettings(aiAssistantEnabled: true, aiApiKey: 'sk-x');
+      final updated = original.copyWith(chineseOcrEnabled: true);
+      expect(updated.chineseOcrEnabled, isTrue);
+      expect(updated.aiAssistantEnabled, original.aiAssistantEnabled);
+      expect(updated.aiApiKey, original.aiApiKey);
+    });
   });
 }

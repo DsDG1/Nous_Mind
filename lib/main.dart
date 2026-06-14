@@ -11,6 +11,7 @@ import 'models/app_settings.dart';
 import 'router.dart';
 import 'services/ai_analyzer.dart';
 import 'services/backup_service.dart';
+import 'services/chinese_ocr_installer.dart';
 import 'services/database.dart';
 import 'services/error_log_service.dart';
 import 'services/inspiration_image_store.dart';
@@ -218,11 +219,23 @@ class _RemindersAppState extends State<RemindersApp>
           create: (_) => attachGlobalErrorLog(ErrorLogService()),
         ),
         ChangeNotifierProvider<AiAssistViewModel>(
-          create: (context) => AiAssistViewModel(
-            widget.aiAnalyzer,
-            settings: context.read<SettingsViewModel>(),
-            errorLog: context.read<ErrorLogService>(),
-          ),
+          create: (context) {
+            // Wire the analyzer to the live settings view model so
+            // toggling 中文 OCR in settings takes effect on the next
+            // assistant invocation without rebuilding the singleton.
+            widget.aiAnalyzer.setChineseOcrProvider(
+              () =>
+                  context.read<SettingsViewModel>().settings.chineseOcrEnabled,
+            );
+            return AiAssistViewModel(
+              widget.aiAnalyzer,
+              settings: context.read<SettingsViewModel>(),
+              errorLog: context.read<ErrorLogService>(),
+            );
+          },
+        ),
+        ChangeNotifierProvider<ChineseOcrInstaller>(
+          create: (_) => ChineseOcrInstaller(),
         ),
         Provider<AiAnalyzer>.value(value: widget.aiAnalyzer),
         Provider<InspirationImageStore>.value(value: widget.imageStore),

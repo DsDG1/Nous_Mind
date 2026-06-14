@@ -109,7 +109,7 @@ void main() {
       expect(drafts.single.title, '买菜');
     });
 
-    test('rejects times with Z suffix', () {
+    test('accepts times with Z suffix and normalizes to local', () {
       final raw = jsonEncode(<String, dynamic>{
         'reminders': <Map<String, String>>[
           <String, String>{
@@ -118,10 +118,16 @@ void main() {
           },
         ],
       });
-      expect(() => parseAssistantJson(raw), throwsA(isA<AiParseException>()));
+      final drafts = parseAssistantJson(raw);
+      expect(drafts, hasLength(1));
+      // The instant is 14:00Z regardless of the device timezone.
+      expect(drafts.single.suggestedTime.toUtc().hour, 14);
+      // The returned DateTime must be a local-typed value so the UI
+      // renders the device's wall-clock reading, not the UTC hour.
+      expect(drafts.single.suggestedTime.isUtc, isFalse);
     });
 
-    test('rejects times with +00:00 suffix', () {
+    test('accepts times with +00:00 suffix and normalizes to local', () {
       final raw = jsonEncode(<String, dynamic>{
         'reminders': <Map<String, String>>[
           <String, String>{
@@ -130,7 +136,10 @@ void main() {
           },
         ],
       });
-      expect(() => parseAssistantJson(raw), throwsA(isA<AiParseException>()));
+      final drafts = parseAssistantJson(raw);
+      expect(drafts, hasLength(1));
+      expect(drafts.single.suggestedTime.toUtc().hour, 14);
+      expect(drafts.single.suggestedTime.isUtc, isFalse);
     });
 
     test('rejects times with no offset', () {
@@ -158,6 +167,11 @@ void main() {
       expect(drafts, hasLength(1));
       // 14:00 +08:00 == 06:00 UTC.
       expect(drafts.single.suggestedTime.toUtc().hour, 6);
+      // The result must be a local DateTime so the rest of the app
+      // reads wall-clock values directly. Previously this was a UTC
+      // DateTime, which is what caused "明天早上 9 点" to render as
+      // 01:00 on a +08:00 device.
+      expect(drafts.single.suggestedTime.isUtc, isFalse);
     });
   });
 

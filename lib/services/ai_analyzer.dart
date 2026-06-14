@@ -28,6 +28,14 @@ abstract class AiAnalyzer {
 
   /// Releases any owned resources (HTTP clients, native recognizers).
   void dispose() {}
+
+  /// Wires the analyzer to a live source of the user's
+  /// `chineseOcrEnabled` preference. The default implementation is a
+  /// no-op so analyzers that ignore the flag do not have to override
+  /// it; the [DeepSeekAnalyzer] uses this to keep its OCR script
+  /// choice in sync with [AppSettings] without rebuilding the
+  /// singleton.
+  void setChineseOcrProvider(bool Function() provider) {}
 }
 
 /// Sealed exception hierarchy. The UI maps each subtype to a user-facing
@@ -69,14 +77,41 @@ class AiOcrException extends AiAnalysisException {
 /// JSON mode enabled. The model is `deepseek-v4-flash` (the new name;
 /// `deepseek-chat` is being retired on 2026-07-24).
 class DeepSeekAnalyzer implements AiAnalyzer {
-  DeepSeekAnalyzer({http.Client? client}) : _client = client ?? http.Client();
+  DeepSeekAnalyzer({http.Client? client, bool chineseOcrEnabled = false})
+    : _client = client ?? http.Client(),
+      _seedChineseOcr = chineseOcrEnabled;
 
   final http.Client _client;
+  bool Function()? _chineseOcrProvider;
   static const String _endpoint =
       'https://api.deepseek.com/v1/chat/completions';
   static const String _model = 'deepseek-v4-flash';
   static const Duration _timeout = Duration(seconds: 30);
   static const int _maxImageEdgePx = 2048;
+
+  /// Wires the analyzer to read the user's
+  /// [AppSettings.chineseOcrEnabled] preference on every [analyze]
+  /// call. The provider is invoked at call time, not attach time, so
+  /// toggling the switch in settings takes effect on the very next
+  /// assistant invocation. The constructor's [chineseOcrEnabled]
+  /// flag is honored as the initial value when the provider is
+  /// absent (e.g. unit tests).
+  @override
+  void setChineseOcrProvider(bool Function() provider) {
+    _chineseOcrProvider = provider;
+  }
+
+  /// Convenience setter for tests and the initial seed when no
+  /// provider is wired. Production code uses [setChineseOcrProvider]
+  /// so live settings changes take effect without rebuilding the
+  /// analyzer.
+  set chineseOcrEnabled(bool value) {
+    _chineseOcrProvider = null;
+    _seedChineseOcr = value;
+  }
+
+  bool _seedChineseOcr = false;
+  bool get _useChinese => _chineseOcrProvider?.call() ?? _seedChineseOcr;
 
   @override
   void dispose() {
@@ -170,24 +205,52 @@ class DeepSeekAnalyzer implements AiAnalyzer {
   }
 
   /// Runs on-device OCR on [imagePath] and returns the recognized
-  /// text. Uses Latin script which is universally available (Chinese
-  /// model requires Google Play Services downloadable module that may
-  /// not be present on all devices and causes a NoClassDefFoundError
-  /// native crash).
+  /// text. When [chineseOcrEnabled] is true the Chinese script is
+  /// attempted first; on any failure (model not downloaded, native
+  /// `NoClassDefFoundError` on a stripped-down Play Services build,
+  /// or simply a script that returns empty text) the analyzer
+  /// transparently retries with the Latin script so the user is
+  /// never stranded by a missing model.
   /// The image is pre-resized so the longest edge is at most
   /// [_maxImageEdgePx] to keep ML Kit's memory usage bounded on large
   /// screenshots.
   Future<String> _runOcr(String imagePath) async {
+    if (_useChinese) {
+      try {
+        return await _runOcrWithScript(
+          imagePath,
+          TextRecognitionScript.chinese,
+        );
+      } on AiOcrException catch (error, stackTrace) {
+        developer.log(
+          'Chinese OCR failed, falling back to Latin',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        // Fall through to Latin below.
+      }
+    }
+    return _runOcrWithScript(imagePath, TextRecognitionScript.latin);
+  }
+
+  /// Runs OCR with an explicit [script]. The Chinese script can throw
+  /// `NoClassDefFoundError` (or any other native failure) when the
+  /// model has not been downloaded, so the caller in [_runOcr] wraps
+  /// the Chinese call in a try/catch and falls back to Latin.
+  Future<String> _runOcrWithScript(
+    String imagePath,
+    TextRecognitionScript script,
+  ) async {
     TextRecognizer? recognizer;
     try {
-      recognizer = TextRecognizer();
+      recognizer = TextRecognizer(script: script);
       final processedPath = await _shrinkImage(imagePath);
       final input = InputImage.fromFilePath(processedPath);
       final recognized = await recognizer.processImage(input);
       return recognized.text;
     } catch (error, stackTrace) {
       developer.log(
-        'OCR failed for $imagePath',
+        'OCR failed for $imagePath (script=${script.name})',
         error: error,
         stackTrace: stackTrace,
       );
@@ -374,12 +437,20 @@ List<ReminderDraft> parseAssistantJson(String raw) {
     if (parsedTime == null) {
       throw AiParseException('某条提醒的时间不是合法 ISO8601');
     }
-    if (!_hasExplicitNonUtcOffset(timeRaw)) {
+    if (!_hasExplicitOffset(timeRaw)) {
       throw AiParseException(
-        '某条提醒的时间必须包含显式的本地时区偏移(如 +08:00),'
-        '不要使用 Z 或省略偏移',
+        '某条提醒的时间必须包含显式的时区偏移(如 +08:00 或 Z),'
+        '不要省略偏移',
       );
     }
+    // Always normalize to the device's local clock. [DateTime.tryParse]
+    // returns a UTC-typed [DateTime] for any string carrying an offset,
+    // which the rest of the app would otherwise render as the UTC wall
+    // time — on a Asia/Shanghai device that turned "明天早上 9 点" into
+    // a reminder displayed as 01:00. Converting here keeps the result
+    // consistent with every other code path (editor, list, notification
+    // scheduler) that assumes [Reminder.reminderTime] is local.
+    final localTime = parsedTime.toLocal();
     final reasonRaw = map['reason'];
     final reason = reasonRaw is String && reasonRaw.trim().isNotEmpty
         ? reasonRaw.trim()
@@ -388,7 +459,7 @@ List<ReminderDraft> parseAssistantJson(String raw) {
       ReminderDraft(
         id: _generateId(),
         title: title.trim(),
-        suggestedTime: parsedTime,
+        suggestedTime: localTime,
         reason: reason,
       ),
     );
@@ -410,15 +481,17 @@ String _stripCodeFences(String input) {
   return rest.join('\n').trim();
 }
 
-/// Returns true only when [iso] ends in a non-zero ±HH:MM offset.
-/// Rejects UTC (`Z`), explicit `+00:00`, and bare local-time strings
-/// (e.g. `2026-06-14T14:00:00`). The model is required to always emit
-/// the device's local offset; silently accepting the others would
-/// cause reminders to fire 8 hours early on Asia/Shanghai devices.
-bool _hasExplicitNonUtcOffset(String iso) {
-  final bool offsetMatch = RegExp(r'[+-]\d{2}:\d{2}$').hasMatch(iso);
-  if (!offsetMatch) return false;
-  return !iso.endsWith('+00:00');
+/// Returns true when [iso] carries an explicit timezone designator —
+/// either `Z` or a `±HH:MM` suffix. Bare local-time strings like
+/// `2026-06-14T14:00:00` are rejected because they are ambiguous
+/// across timezones. Accepting `Z` / `+00:00` here (previously
+/// rejected) keeps the door open for users whose device is genuinely
+/// in UTC; the parser still anchors the moment via
+/// [DateTime.tryParse] and then normalizes to the device's local
+/// clock before handing the value to the UI.
+bool _hasExplicitOffset(String iso) {
+  if (iso.endsWith('Z')) return true;
+  return RegExp(r'[+-]\d{2}:\d{2}$').hasMatch(iso);
 }
 
 String _generateId() {

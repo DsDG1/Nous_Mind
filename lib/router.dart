@@ -14,6 +14,7 @@ import 'pages/settings/appearance_settings_page.dart';
 import 'pages/settings/changelog_page.dart';
 import 'pages/settings/deepseek_settings_page.dart';
 import 'pages/settings/data_settings_page.dart';
+import 'pages/settings/local_ocr_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings/about_settings_page.dart';
 import 'pages/settings_page.dart';
@@ -137,6 +138,10 @@ final GoRouter router = GoRouter(
                     GoRoute(
                       path: 'deepseek',
                       builder: (context, state) => const DeepSeekSettingsPage(),
+                    ),
+                    GoRoute(
+                      path: 'local-ocr',
+                      builder: (context, state) => const LocalOcrSettingsPage(),
                     ),
                   ],
                 ),

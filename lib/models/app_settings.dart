@@ -143,6 +143,7 @@ class AppSettings {
     this.autoDeleteAfter24h = true,
     this.aiAssistantEnabled = false,
     this.aiApiKey,
+    this.chineseOcrEnabled = false,
   });
 
   final ThemeMode themeMode;
@@ -170,6 +171,15 @@ class AppSettings {
   /// blank string.
   final String? aiApiKey;
 
+  /// Whether the user has opted in to on-device Chinese OCR for
+  /// screenshot parsing. The Chinese model itself is fetched via
+  /// Google Play Services (Android) or bundled in the IPA (iOS); this
+  /// flag is purely the user's "I want 中文 OCR" preference and is
+  /// independent of whether the model is currently on disk. The
+  /// analyzer falls back to the always-available Latin script when
+  /// the Chinese model is missing or fails.
+  final bool chineseOcrEnabled;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     AppSeedColor? seedColor,
@@ -180,6 +190,7 @@ class AppSettings {
     bool? autoDeleteAfter24h,
     bool? aiAssistantEnabled,
     String? aiApiKey,
+    bool? chineseOcrEnabled,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -191,6 +202,7 @@ class AppSettings {
       autoDeleteAfter24h: autoDeleteAfter24h ?? this.autoDeleteAfter24h,
       aiAssistantEnabled: aiAssistantEnabled ?? this.aiAssistantEnabled,
       aiApiKey: aiApiKey ?? this.aiApiKey,
+      chineseOcrEnabled: chineseOcrEnabled ?? this.chineseOcrEnabled,
     );
   }
 
@@ -204,6 +216,7 @@ class AppSettings {
     'auto_delete_after_24h': autoDeleteAfter24h,
     'ai_assistant_enabled': aiAssistantEnabled,
     if (aiApiKey != null) 'ai_api_key': aiApiKey,
+    'chinese_ocr_enabled': chineseOcrEnabled,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -243,6 +256,7 @@ class AppSettings {
       autoDeleteAfter24h: (json['auto_delete_after_24h'] as bool?) ?? true,
       aiAssistantEnabled: (json['ai_assistant_enabled'] as bool?) ?? false,
       aiApiKey: _normalizeApiKey(json['ai_api_key']),
+      chineseOcrEnabled: (json['chinese_ocr_enabled'] as bool?) ?? false,
     );
   }
 

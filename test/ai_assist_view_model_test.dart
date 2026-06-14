@@ -46,6 +46,9 @@ class _ScriptedAnalyzer implements AiAnalyzer {
 
   @override
   void dispose() {}
+
+  @override
+  void setChineseOcrProvider(bool Function() provider) {}
 }
 
 List<ReminderDraft> _okDrafts() => <ReminderDraft>[

@@ -221,19 +221,6 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
               ),
             ),
           ),
-        TextField(
-          controller: _textController,
-          minLines: 5,
-          maxLines: 10,
-          decoration: const InputDecoration(
-            labelText: '文本',
-            hintText: '粘贴聊天记录、邮件内容,或直接描述…',
-            border: OutlineInputBorder(),
-            alignLabelWithHint: true,
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 16),
         ImagePreview(
           imagePath: _imagePath,
           onRemove: _imagePath == null ? null : _removeImage,
@@ -261,6 +248,19 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _textController,
+          minLines: 5,
+          maxLines: 10,
+          decoration: const InputDecoration(
+            labelText: '文本',
+            hintText: '粘贴聊天记录、邮件内容,或直接描述…',
+            border: OutlineInputBorder(),
+            alignLabelWithHint: true,
+          ),
+          onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 24),
         FilledButton.icon(

@@ -62,4 +62,11 @@ class SettingsViewModel extends ChangeNotifier {
       aiApiKey: (value == null || value.trim().isEmpty) ? null : value.trim(),
     ),
   );
+
+  /// Toggles the user-facing "中文 OCR" preference. Independent of the
+  /// model's on-disk presence: the analyzer will fall back to Latin
+  /// when the Chinese model is missing or fails, so flipping this
+  /// switch never bricks OCR.
+  Future<void> setChineseOcrEnabled(bool value) =>
+      _update(_settings.copyWith(chineseOcrEnabled: value));
 }
