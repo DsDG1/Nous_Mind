@@ -113,9 +113,8 @@ Future<String> _readTimezone() async {
 /// Routes a notification action button press to the right
 /// [RemindersViewModel] call. Snooze pushes the reminder's fire time
 /// forward by the user's current [SnoozeDuration] and re-schedules;
-/// complete deletes the reminder outright — matching the existing
-/// 24-hour auto-delete semantics so a "done" press has the same
-/// effect as the reminder expiring naturally.
+/// complete soft-deletes the reminder so the user can still recover
+/// it from the trash page if the press was a misclick.
 ///
 /// The handler runs in two cases:
 ///  1. The app is in the foreground when the user taps the action.
@@ -150,10 +149,15 @@ void _handleNotificationAction(NotificationResponse response) {
       );
       break;
     case NotificationService.kCompleteActionId:
-      unawaited(reminders.delete(reminderId));
+      // "完成" in v1.3.0 is a soft delete: the reminder moves to the
+      // trash and can be restored from the trash page if the user
+      // changed their mind. The previous behaviour was a permanent
+      // delete, but the trash makes that strictly less convenient and
+      // strictly more reversible.
+      unawaited(reminders.softDelete(reminderId));
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('已从列表中移除')));
+        ..showSnackBar(const SnackBar(content: Text('已移入回收站')));
       break;
   }
 }

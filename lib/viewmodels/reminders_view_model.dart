@@ -22,6 +22,10 @@ import 'settings_view_model.dart';
 /// reminder via an internal timer and fires the callback at the exact
 /// [Reminder.reminderTime]. This is used to show an in-app popup regardless
 /// of which tab is active.
+///
+/// Soft-deleted reminders are kept in the database for [trashRetention]
+/// so the user can restore them from the trash page. Rows past that
+/// window are purged permanently along with their image files.
 class RemindersViewModel extends ChangeNotifier {
   RemindersViewModel(
     this._repository,
@@ -32,11 +36,22 @@ class RemindersViewModel extends ChangeNotifier {
     _bootstrap();
   }
 
+  /// How long a soft-deleted reminder stays in the trash before the
+  /// next purge sweep removes it permanently. Hard-coded for now;
+  /// promoting it to a user-facing setting is on the roadmap but
+  /// intentionally out of scope for v1.3.0.
+  static const Duration trashRetention = Duration(days: 30);
+
   final ReminderRepository _repository;
   final NotificationService _notifications;
   final SettingsViewModel _settings;
   final InspirationImageStore _imageStore;
   final List<Reminder> _reminders = <Reminder>[];
+
+  /// Cached trash count, kept in sync with every soft-delete / restore /
+  /// purge. Surfaced by the data-settings tile and the trash page
+  /// header. Updated through [notifyListeners] on every change.
+  int _trashCount = 0;
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -48,8 +63,14 @@ class RemindersViewModel extends ChangeNotifier {
 
   Timer? _nearestTimer;
 
-  /// Unmodifiable view of the current list.
+  /// Unmodifiable view of the current list of active (non-trashed)
+  /// reminders.
   List<Reminder> get reminders => List.unmodifiable(_reminders);
+
+  /// Number of reminders currently in the trash. Cheap read; the
+  /// underlying value is refreshed by every mutating call so consumers
+  /// that listen on the same `ChangeNotifier` get live updates.
+  int get trashCount => _trashCount;
 
   @override
   void dispose() {
@@ -58,7 +79,8 @@ class RemindersViewModel extends ChangeNotifier {
   }
 
   Future<void> _bootstrap() async {
-    final loaded = await _repository.getAll();
+    final loaded = await _repository.getAllActive();
+    _trashCount = await _repository.countTrash();
     _reminders
       ..clear()
       ..addAll(loaded);
@@ -68,15 +90,24 @@ class RemindersViewModel extends ChangeNotifier {
     // scheduled alarms (e.g. Android after device reboot).
     await _rescheduleAll();
     _scheduleNearestTimer();
-    // Honour the user's auto-delete preference on cold start so past-due
-    // reminders from a previous session don't accumulate forever.
-    await _purgeExpiredReminders();
+    // Honour the user's auto-delete preference and the 30-day trash
+    // retention on cold start so stale rows don't accumulate forever.
+    await _purgeTrashAndExpired();
   }
 
   /// Reloads the in-memory list from the database. Used by the data
   /// management subpage after bulk imports or clears so the UI mirrors
   /// the on-disk state without restarting the app.
   Future<void> refresh() => _bootstrap();
+
+  /// Refreshes the cached trash count without touching the active
+  /// reminder list. Cheaper than [refresh] for surfaces that only
+  /// care about the trash tile / page (e.g. the data settings page
+  /// when returning from the trash page).
+  Future<void> refreshTrashCount() async {
+    _trashCount = await _repository.countTrash();
+    notifyListeners();
+  }
 
   Future<void> _rescheduleAll() async {
     final now = DateTime.now();
@@ -123,22 +154,125 @@ class RemindersViewModel extends ChangeNotifier {
     _scheduleNearestTimer();
   }
 
-  /// Removes the reminder with [id] from the list and persists the change.
-  /// Also deletes the associated image file if present.
-  Future<void> delete(String id) async {
+  /// Soft-deletes a reminder. The row is kept in the database for
+  /// [trashRetention] so the user can restore it from the trash page;
+  /// the scheduled notification (if any) is cancelled immediately so
+  /// the user does not get notified for something they just deleted.
+  /// The on-disk image is **not** removed — the permanent-delete
+  /// path handles image cleanup so a restore keeps the picture.
+  Future<void> softDelete(String id, {DateTime? now}) async {
     final index = _reminders.indexWhere((r) => r.id == id);
     if (index == -1) {
       return;
     }
-    final imagePath = _reminders[index].imagePath;
-    _reminders.removeAt(index);
-    await _repository.delete(id);
+    final reminder = _reminders[index];
+    final deleted = reminder.copyWith(
+      isDeleted: true,
+      deletedAt: now ?? DateTime.now(),
+    );
+    _reminders[index] = deleted;
+    await _repository.softDelete(id, deleted.deletedAt!);
+    _trashCount += 1;
     notifyListeners();
-    await _notifications.cancelReminder(id);
-    _scheduleNearestTimer();
-    if (imagePath != null) {
-      await _imageStore.deleteByPath(imagePath);
+    try {
+      await _notifications.cancelReminder(id);
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to cancel notification during soft delete',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
+    _scheduleNearestTimer();
+  }
+
+  /// Restores a trashed reminder back to the active list. Re-arms the
+  /// OS notification if the reminder's fire time is still in the
+  /// future; past-due reminders stay visible but skip the
+  /// notification schedule (the next 24h auto-delete sweep will pick
+  /// them up if the user has that preference on).
+  Future<void> restore(String id) async {
+    // Refresh from the database in case the in-memory cache is stale
+    // (e.g. the user re-launched the app while a trashed row existed).
+    final trashed = await _repository.getAllTrash();
+    final original = trashed.where((r) => r.id == id).firstOrNull;
+    if (original == null) {
+      // Fall back to a minimal restore if the row vanished (e.g. it
+      // was purged between page-open and tap).
+      return;
+    }
+    final restored = original.copyWith(isDeleted: false, clearDeletedAt: true);
+    _reminders.insert(0, restored);
+    // Keep the existing sort (newest created first) stable; resorting
+    // would only matter for the top of the list and the user just
+    // re-created the row, so a leading position is acceptable.
+    await _repository.restore(id);
+    _trashCount = (_trashCount - 1).clamp(0, 1 << 30);
+    notifyListeners();
+    if (restored.reminderTime.isAfter(DateTime.now())) {
+      await _safeSchedule(restored);
+    }
+    _scheduleNearestTimer();
+  }
+
+  /// Moves every active reminder to the trash in one pass. Used by
+  /// the data-settings "全部移入回收站" action. The OS notification for
+  /// each row is cancelled; image files are left in place so a
+  /// subsequent "全部恢复" brings everything back intact.
+  ///
+  /// Returns the number of reminders that were moved.
+  Future<int> clearAllToTrash() async {
+    if (_reminders.isEmpty) return 0;
+    final now = DateTime.now();
+    final toTrash = List<Reminder>.from(_reminders);
+    for (final r in toTrash) {
+      final stamped = r.copyWith(isDeleted: true, deletedAt: now);
+      final i = _reminders.indexWhere((e) => e.id == r.id);
+      if (i != -1) _reminders[i] = stamped;
+      await _repository.softDelete(r.id, now);
+      try {
+        await _notifications.cancelReminder(r.id);
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to cancel notification during clearAllToTrash',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    _trashCount += toTrash.length;
+    notifyListeners();
+    _scheduleNearestTimer();
+    return toTrash.length;
+  }
+
+  /// Permanently removes every trashed reminder. Used by the trash
+  /// page's "永久删除" action. Image files are deleted from disk; the
+  /// OS notification cancel is a no-op (soft delete already cancelled
+  /// them).
+  ///
+  /// Returns the number of reminders actually removed.
+  Future<int> purgeTrash() async {
+    final trashed = await _repository.getAllTrash();
+    if (trashed.isEmpty) return 0;
+    for (final r in trashed) {
+      await _repository.permanentDelete(r.id);
+      final imagePath = r.imagePath;
+      if (imagePath != null) {
+        try {
+          await _imageStore.deleteByPath(imagePath);
+        } on Exception catch (error, stackTrace) {
+          developer.log(
+            'Failed to delete trashed reminder image',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+    _trashCount = 0;
+    notifyListeners();
+    return trashed.length;
   }
 
   /// Wraps [NotificationService.scheduleReminder] so that a permission
@@ -187,23 +321,51 @@ class RemindersViewModel extends ChangeNotifier {
     _scheduleNearestTimer();
   }
 
-  /// Removes reminders whose scheduled time is more than 24 hours in the
-  /// past, but only when the user has opted in via [AppSettings].
-  /// Anchored to [Reminder.reminderTime] — snoozing a reminder refreshes
-  /// `reminderTime` and therefore extends the 24-hour window naturally.
-  Future<void> _purgeExpiredReminders() async {
+  /// Combined sweep that runs on cold start and on every foreground
+  /// resume:
+  ///   1. Permanently deletes trashed rows older than [trashRetention]
+  ///      and the associated image files.
+  ///   2. When the user has `autoDeleteAfter24h` enabled, permanently
+  ///      deletes active rows whose fire time is more than 24 h in the
+  ///      past.
+  ///
+  /// The two passes are independent: a row that was soft-deleted 30
+  /// days ago is purged regardless of the auto-delete setting, and
+  /// vice versa. Both passes update the in-memory cache and emit
+  /// `notifyListeners` exactly once at the end.
+  Future<void> _purgeTrashAndExpired() async {
+    final trashCutoff = DateTime.now().subtract(trashRetention);
+    final purgedTrashImages = await _repository.purgeTrashOlderThan(
+      trashCutoff,
+    );
+    for (final imagePath in purgedTrashImages) {
+      if (imagePath == null) continue;
+      try {
+        await _imageStore.deleteByPath(imagePath);
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to delete trashed reminder image during purge',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+    final trashPurged = purgedTrashImages.isNotEmpty;
+
     if (!_settings.settings.autoDeleteAfter24h) {
+      if (trashPurged) {
+        _trashCount = await _repository.countTrash();
+        notifyListeners();
+      }
       return;
     }
+
     final now = DateTime.now();
     final expired = _reminders
         .where(
           (r) => r.reminderTime.add(const Duration(hours: 24)).isBefore(now),
         )
         .toList();
-    if (expired.isEmpty) {
-      return;
-    }
     for (final reminder in expired) {
       try {
         await _notifications.cancelReminder(reminder.id);
@@ -226,21 +388,27 @@ class RemindersViewModel extends ChangeNotifier {
           );
         }
       }
-      await _repository.delete(reminder.id);
+      await _repository.permanentDelete(reminder.id);
     }
     _reminders.removeWhere((r) => expired.any((e) => e.id == r.id));
-    notifyListeners();
+    if (trashPurged || expired.isNotEmpty) {
+      if (trashPurged) {
+        _trashCount = await _repository.countTrash();
+      }
+      notifyListeners();
+    }
     _scheduleNearestTimer();
   }
 
   /// Public hook so the app's lifecycle observer can trigger a purge on
   /// every foreground resume without exposing the private method.
-  Future<void> onAppResumed() => _purgeExpiredReminders();
+  Future<void> onAppResumed() => _purgeTrashAndExpired();
 
-  /// Removes every reminder, cancels its scheduled notification, and
-  /// deletes the associated image file (if any). Used by the data
+  /// Removes every active reminder, cancels its scheduled notification,
+  /// and deletes the associated image file (if any). Used by the data
   /// management subpage for bulk clear. Returns the number of
-  /// reminders actually removed.
+  /// reminders actually removed. Trashed rows are intentionally
+  /// untouched — the user has already moved them aside.
   Future<int> clearAll() async {
     final all = List<Reminder>.from(_reminders);
     for (final reminder in all) {

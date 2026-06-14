@@ -143,10 +143,15 @@ class BackupService {
   /// a JSON file under the system temp directory and returns the file
   /// path. The caller is responsible for sharing / saving the file.
   ///
+  /// Trashed reminders (`is_deleted = true`) are intentionally excluded
+  /// from the export — the trash is a transient safety net for the
+  /// last 30 days, not a long-term archive. Callers that want a fuller
+  /// export can read the repository directly.
+  ///
   /// JSON encoding is offloaded to a background isolate via [compute] so
   /// large backups do not stall the UI thread.
   Future<File> exportToFile() async {
-    final reminders = await _reminders.getAll();
+    final reminders = await _reminders.getAllActive();
     final inspirations = await _inspirations.getAll();
     final settings = await _settings.load();
     final input = _ExportInput(

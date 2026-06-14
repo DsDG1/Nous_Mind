@@ -15,7 +15,7 @@ class AppDatabase {
 
   final Database _db;
 
-  static const int _version = 3;
+  static const int _version = 4;
   static const String _name = 'reminders.db';
 
   Database get db => _db;
@@ -42,9 +42,15 @@ class AppDatabase {
         reminder_time TEXT NOT NULL,
         image_path TEXT,
         description TEXT,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        deleted_at TEXT,
         created_at TEXT NOT NULL
       )
     ''');
+    await db.execute(
+      'CREATE INDEX idx_reminders_is_deleted_deleted_at '
+      'ON reminders (is_deleted, deleted_at)',
+    );
     await db.execute('''
       CREATE TABLE inspirations (
         id TEXT PRIMARY KEY,
@@ -80,6 +86,20 @@ class AppDatabase {
       // column as NULL for rows written before the migration, which
       // [Reminder.fromMap] already treats as "no description".
       await db.execute('ALTER TABLE reminders ADD COLUMN description TEXT');
+    }
+    if (oldVersion < 4) {
+      // v4 adds soft-delete ("trash") support. Pre-existing rows get
+      // `is_deleted = 0` via the column default and `deleted_at = NULL`
+      // (implicit), so they continue to behave as active reminders
+      // without any per-row backfill.
+      await db.execute(
+        'ALTER TABLE reminders ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0',
+      );
+      await db.execute('ALTER TABLE reminders ADD COLUMN deleted_at TEXT');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_reminders_is_deleted_deleted_at '
+        'ON reminders (is_deleted, deleted_at)',
+      );
     }
   }
 

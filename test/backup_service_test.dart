@@ -140,7 +140,7 @@ void main() {
 
       expect(result.remindersImported, 1);
       expect(result.inspirationsImported, 1);
-      final allReminders = await reminders.getAll();
+      final allReminders = await reminders.getAllActive();
       final allInspirations = await inspirations.getAll();
       expect(allReminders, hasLength(2));
       expect(allInspirations, hasLength(2));

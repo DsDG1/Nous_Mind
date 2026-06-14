@@ -48,7 +48,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     Reminder reminder,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
-    await viewModel.delete(reminder.id);
+    await viewModel.softDelete(reminder.id);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(

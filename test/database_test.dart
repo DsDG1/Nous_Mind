@@ -83,7 +83,7 @@ void main() {
       final db = await AppDatabase.open(path: dbPath());
       addTearDown(db.close);
 
-      final reminders = await ReminderRepository(db).getAll();
+      final reminders = await ReminderRepository(db).getAllActive();
       final inspirations = await InspirationRepository(db).getAll();
 
       expect(reminders, hasLength(1));
@@ -109,7 +109,7 @@ void main() {
       final second = await AppDatabase.open(path: dbPath());
       addTearDown(second.close);
 
-      final reminders = await ReminderRepository(second).getAll();
+      final reminders = await ReminderRepository(second).getAllActive();
       expect(reminders, hasLength(1));
     });
   });
