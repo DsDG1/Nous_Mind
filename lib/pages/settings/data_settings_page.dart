@@ -34,7 +34,9 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
   Future<void> _refreshStats() async {
     setState(() => _loadingStats = true);
     final backup = context.read<BackupService>();
-    final stats = await backup.getStats();
+    // Use the cached refresh path so the home page's stats card picks up
+    // the new value via its ValueNotifier subscription at the same time.
+    final stats = await backup.refreshStats();
     if (!mounted) return;
     setState(() {
       _stats = stats;
@@ -50,10 +52,9 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     try {
       final file = await backup.exportToFile();
       if (!mounted) return;
-      await Share.shareXFiles(
-        <XFile>[XFile(file.path, mimeType: 'application/json')],
-        text: 'Nous 记事 备份',
-      );
+      await Share.shareXFiles(<XFile>[
+        XFile(file.path, mimeType: 'application/json'),
+      ], text: 'Nous 记事 备份');
     } on Exception catch (error) {
       messenger
         ..hideCurrentSnackBar()
@@ -203,9 +204,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(content: Text('已清空 ($r 条提醒, $i 条灵感)')),
-        );
+        ..showSnackBar(SnackBar(content: Text('已清空 ($r 条提醒, $i 条灵感)')));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -331,11 +330,17 @@ class _StatsRow extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: <Widget>[
-          Expanded(child: _StatCell(label: '提醒', value: reminderText)),
+          Expanded(
+            child: _StatCell(label: '提醒', value: reminderText),
+          ),
           const _StatDivider(),
-          Expanded(child: _StatCell(label: '灵感', value: inspirationText)),
+          Expanded(
+            child: _StatCell(label: '灵感', value: inspirationText),
+          ),
           const _StatDivider(),
-          Expanded(child: _StatCell(label: '图片', value: imageText)),
+          Expanded(
+            child: _StatCell(label: '图片', value: imageText),
+          ),
         ],
       ),
     );

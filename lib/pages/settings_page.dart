@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_settings.dart';
-import '../services/backup_service.dart';
 import '../viewmodels/settings_view_model.dart';
 import '../widgets/settings_section.dart';
 import '../widgets/settings_stats_card.dart';
@@ -19,14 +18,12 @@ class SettingsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: SafeArea(
-        child: Consumer<SettingsViewModel>(
-          builder: (context, vm, _) {
-            final settings = vm.settings;
+        child: Selector<SettingsViewModel, _SettingsForSubtitle>(
+          selector: (_, vm) => _SettingsForSubtitle.from(vm.settings),
+          builder: (context, settings, _) {
             return ListView(
               children: <Widget>[
-                SettingsStatsCard(
-                  future: context.read<BackupService>().getStats(),
-                ),
+                const SettingsStatsCard(),
                 SettingsSection(
                   title: '偏好',
                   icon: Icons.tune,
@@ -73,12 +70,12 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  static String _appearanceSubtitle(AppSettings settings) {
+  static String _appearanceSubtitle(_SettingsForSubtitle settings) {
     return '${themeModeLabel(settings.themeMode)} · '
         '${appSeedColorShortLabel(settings.seedColor)}';
   }
 
-  static String _notificationSubtitle(AppSettings settings) {
+  static String _notificationSubtitle(_SettingsForSubtitle settings) {
     final parts = <String>[];
     if (settings.vibrationEnabled) {
       parts.add('震动');
@@ -89,6 +86,59 @@ class SettingsPage extends StatelessWidget {
     parts.add('贪睡 ${settings.snoozeDuration.duration.inMinutes} 分钟');
     return parts.join(' · ');
   }
+}
+
+/// Selector key that holds only the fields the settings home renders, so the
+/// `ListView` rebuilds only when those specific fields change. Unrelated
+/// settings updates (e.g. quiet-hour windows or the auto-delete flag) are
+/// ignored here.
+class _SettingsForSubtitle {
+  const _SettingsForSubtitle({
+    required this.themeMode,
+    required this.seedColor,
+    required this.vibrationEnabled,
+    required this.quietHoursEnabled,
+    required this.snoozeDuration,
+    required this.aiApiKey,
+  });
+
+  factory _SettingsForSubtitle.from(AppSettings settings) {
+    return _SettingsForSubtitle(
+      themeMode: settings.themeMode,
+      seedColor: settings.seedColor,
+      vibrationEnabled: settings.vibrationEnabled,
+      quietHoursEnabled: settings.quietHoursEnabled,
+      snoozeDuration: settings.snoozeDuration,
+      aiApiKey: settings.aiApiKey,
+    );
+  }
+
+  final ThemeMode themeMode;
+  final AppSeedColor seedColor;
+  final bool vibrationEnabled;
+  final bool quietHoursEnabled;
+  final SnoozeDuration snoozeDuration;
+  final String? aiApiKey;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _SettingsForSubtitle &&
+      other.themeMode == themeMode &&
+      other.seedColor == seedColor &&
+      other.vibrationEnabled == vibrationEnabled &&
+      other.quietHoursEnabled == quietHoursEnabled &&
+      other.snoozeDuration == snoozeDuration &&
+      other.aiApiKey == aiApiKey;
+
+  @override
+  int get hashCode => Object.hash(
+    themeMode,
+    seedColor,
+    vibrationEnabled,
+    quietHoursEnabled,
+    snoozeDuration,
+    aiApiKey,
+  );
 }
 
 class _SeedColorLeading extends StatelessWidget {

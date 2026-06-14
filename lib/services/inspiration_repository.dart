@@ -20,6 +20,14 @@ class InspirationRepository {
     await _database.db.insert('inspirations', _toRow(inspiration));
   }
 
+  Future<void> insertAll(List<Inspiration> inspirations) async {
+    final batch = _database.db.batch();
+    for (final inspiration in inspirations) {
+      batch.insert('inspirations', _toRow(inspiration));
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<void> update(Inspiration inspiration) async {
     await _database.db.update(
       'inspirations',
@@ -48,6 +56,13 @@ class InspirationRepository {
       'SELECT COUNT(*) AS cnt FROM inspirations',
     );
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Returns just the primary keys, used by import paths that need to
+  /// dedup against existing rows without paying for full-row materialisation.
+  Future<Set<String>> listIds() async {
+    final rows = await _database.db.query('inspirations', columns: ['id']);
+    return {for (final row in rows) row['id'] as String};
   }
 
   /// Removes every row from the inspirations table. Used by the data

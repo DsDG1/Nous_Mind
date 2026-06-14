@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -65,52 +67,96 @@ class BackupService {
   final SettingsRepository _settings;
   final InspirationImageStore _imageStore;
 
+  /// Latest stats snapshot. Settings UIs read this via [ValueListenableBuilder]
+  /// so they can paint the previously-cached value instantly on entry, while
+  /// [refreshStats] runs in the background and updates the same notifier.
+  final ValueNotifier<StorageStats?> statsNotifier =
+      ValueNotifier<StorageStats?>(null);
+
+  /// Shared in-flight future so concurrent callers (e.g. multiple settings
+  /// rebuilds within the same frame) coalesce into a single computation.
+  Future<StorageStats>? _inflight;
+
   static const int _backupVersion = 1;
 
-  /// Counts records and sums the on-disk size of the image directory.
-  /// Cheap enough to call from build methods.
-  Future<StorageStats> getStats() async {
-    final reminderCount = await _reminders.count();
-    final inspirationCount = await _inspirations.count();
-    final imageBytes = await _sumImageBytes();
-    return StorageStats(
-      reminderCount: reminderCount,
-      inspirationCount: inspirationCount,
-      imageBytes: imageBytes,
-    );
+  /// Re-runs the underlying counts and writes the new snapshot to
+  /// [statsNotifier]. Single-flight: parallel calls share the same future.
+  Future<StorageStats> refreshStats() {
+    final pending = _inflight;
+    if (pending != null) return pending;
+    final future = _computeStats().whenComplete(() => _inflight = null);
+    _inflight = future;
+    return future;
   }
 
+  /// Backwards-compatible wrapper that callers can still await without
+  /// touching [statsNotifier]. Identical semantics to [refreshStats] now.
+  Future<StorageStats> getStats() => refreshStats();
+
+  /// Called after mutations (import, clear) to keep the cached value fresh.
+  /// We do not clear the old value first so the UI does not flicker to `—`
+  /// before the new numbers arrive.
+  Future<StorageStats> invalidateAndRefresh() => refreshStats();
+
+  Future<StorageStats> _computeStats() async {
+    final results = await Future.wait<Object?>(<Future<Object?>>[
+      _reminders.count(),
+      _inspirations.count(),
+      _sumImageBytes(),
+    ]);
+    final stats = StorageStats(
+      reminderCount: results[0]! as int,
+      inspirationCount: results[1]! as int,
+      imageBytes: results[2]! as int,
+    );
+    statsNotifier.value = stats;
+    return stats;
+  }
+
+  /// Sums the byte sizes of every file directly under the images directory.
+  /// File-stat calls are issued in parallel via [Future.wait], so the cost
+  /// is bounded by the slowest single stat instead of the directory size.
   Future<int> _sumImageBytes() async {
     final dir = _imageStore.imagesDir;
     if (!await dir.exists()) return 0;
-    var total = 0;
+    final futures = <Future<int>>[];
     await for (final entity in dir.list(followLinks: false)) {
       if (entity is File) {
-        try {
-          total += await entity.length();
-        } on FileSystemException {
-          // File disappeared between listing and stat-ing; ignore.
-        }
+        futures.add(_safeLength(entity));
       }
     }
-    return total;
+    if (futures.isEmpty) return 0;
+    final lengths = await Future.wait(futures);
+    return lengths.fold<int>(0, (sum, value) => sum + value);
+  }
+
+  Future<int> _safeLength(File file) async {
+    try {
+      return await file.length();
+    } on FileSystemException {
+      // File disappeared between listing and stat-ing; ignore.
+      return 0;
+    }
   }
 
   /// Serialises the current reminders, inspirations, and settings into
   /// a JSON file under the system temp directory and returns the file
   /// path. The caller is responsible for sharing / saving the file.
+  ///
+  /// JSON encoding is offloaded to a background isolate via [compute] so
+  /// large backups do not stall the UI thread.
   Future<File> exportToFile() async {
     final reminders = await _reminders.getAll();
     final inspirations = await _inspirations.getAll();
     final settings = await _settings.load();
-    final payload = <String, dynamic>{
-      'version': _backupVersion,
-      'exported_at': DateTime.now().toIso8601String(),
-      'reminders': reminders.map((r) => r.toJson()).toList(),
-      'inspirations': inspirations.map((i) => i.toJson()).toList(),
-      'settings': settings.toJson(),
-    };
-    final json = const JsonEncoder.withIndent('  ').convert(payload);
+    final input = _ExportInput(
+      version: _backupVersion,
+      exportedAt: DateTime.now().toIso8601String(),
+      reminders: reminders.map((r) => r.toJson()).toList(growable: false),
+      inspirations: inspirations.map((i) => i.toJson()).toList(growable: false),
+      settings: settings.toJson(),
+    );
+    final json = await compute(_buildPayloadAndEncode, input);
     final dir = await getTemporaryDirectory();
     final stamp = _timestampForFilename(DateTime.now());
     final file = File(p.join(dir.path, 'nous_backup_$stamp.json'));
@@ -123,6 +169,10 @@ class BackupService {
   /// importing the same backup twice is a no-op for duplicates. Settings
   /// are intentionally not restored — overwriting theme and notification
   /// preferences without confirmation would be hostile.
+  ///
+  /// Inserts run in a single batched transaction per table, so importing
+  /// large backups completes in roughly one round-trip per table instead
+  /// of one per record.
   Future<BackupResult> importFromFile(File file) async {
     final content = await file.readAsString();
     final decoded = jsonDecode(content);
@@ -135,44 +185,45 @@ class BackupService {
       throw const FormatException('Backup file is missing required lists');
     }
 
-    final existingReminders = {
-      for (final r in await _reminders.getAll()) r.id: r,
-    };
-    final existingInspirations = {
-      for (final i in await _inspirations.getAll()) i.id: i,
-    };
+    final existingReminderIds = await _reminders.listIds();
+    final existingInspirationIds = await _inspirations.listIds();
 
-    var remindersImported = 0;
+    final toInsertReminders = <Reminder>[];
     for (final item in remindersRaw) {
       if (item is! Map<String, dynamic>) continue;
       try {
         final reminder = Reminder.fromJson(item);
-        if (existingReminders.containsKey(reminder.id)) continue;
-        await _reminders.insert(reminder);
-        existingReminders[reminder.id] = reminder;
-        remindersImported += 1;
+        if (existingReminderIds.contains(reminder.id)) continue;
+        existingReminderIds.add(reminder.id);
+        toInsertReminders.add(reminder);
       } on Exception {
         // Skip malformed entries silently; the import still succeeds.
       }
     }
 
-    var inspirationsImported = 0;
+    final toInsertInspirations = <Inspiration>[];
     for (final item in inspirationsRaw) {
       if (item is! Map<String, dynamic>) continue;
       try {
         final inspiration = Inspiration.fromJson(item);
-        if (existingInspirations.containsKey(inspiration.id)) continue;
-        await _inspirations.insert(inspiration);
-        existingInspirations[inspiration.id] = inspiration;
-        inspirationsImported += 1;
+        if (existingInspirationIds.contains(inspiration.id)) continue;
+        existingInspirationIds.add(inspiration.id);
+        toInsertInspirations.add(inspiration);
       } on Exception {
         // Skip malformed entries silently; the import still succeeds.
       }
     }
 
+    if (toInsertReminders.isNotEmpty) {
+      await _reminders.insertAll(toInsertReminders);
+    }
+    if (toInsertInspirations.isNotEmpty) {
+      await _inspirations.insertAll(toInsertInspirations);
+    }
+
     return BackupResult(
-      remindersImported: remindersImported,
-      inspirationsImported: inspirationsImported,
+      remindersImported: toInsertReminders.length,
+      inspirationsImported: toInsertInspirations.length,
     );
   }
 
@@ -192,4 +243,40 @@ class BackupService {
     return '${four(time.year)}${two(time.month)}${two(time.day)}'
         '_${two(time.hour)}${two(time.minute)}${two(time.second)}';
   }
+
+  void dispose() {
+    statsNotifier.dispose();
+  }
+}
+
+/// Plain-data carrier for export payloads. All fields are isolate-sendable
+/// (ints, Strings, and nested Maps/Lists of the same) so this class can be
+/// passed to [compute] without copying through JSON first.
+class _ExportInput {
+  const _ExportInput({
+    required this.version,
+    required this.exportedAt,
+    required this.reminders,
+    required this.inspirations,
+    required this.settings,
+  });
+
+  final int version;
+  final String exportedAt;
+  final List<Map<String, dynamic>> reminders;
+  final List<Map<String, dynamic>> inspirations;
+  final Map<String, dynamic> settings;
+}
+
+/// Top-level so it can be invoked by [compute]: it must be a static or
+/// top-level function with a single positional argument.
+String _buildPayloadAndEncode(_ExportInput input) {
+  final payload = <String, dynamic>{
+    'version': input.version,
+    'exported_at': input.exportedAt,
+    'reminders': input.reminders,
+    'inspirations': input.inspirations,
+    'settings': input.settings,
+  };
+  return const JsonEncoder.withIndent('  ').convert(payload);
 }

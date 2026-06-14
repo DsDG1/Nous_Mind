@@ -1,47 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../services/backup_service.dart';
 
 /// Compact card displayed at the top of the settings home page. Shows
 /// the current record counts and the on-disk size of the user's images.
 ///
-/// Reads its data once when first built; subsequent updates require a
-/// manual [reload]. Designed to be wrapped in a `FutureBuilder` by the
-/// host page so the rest of the page does not block on the database.
-class SettingsStatsCard extends StatefulWidget {
-  const SettingsStatsCard({required this.future, super.key});
+/// Subscribes to [BackupService.statsNotifier] so it can paint the most
+/// recent cached value instantly when the settings page is re-entered.
+/// Triggering a refresh is the host's job — typically via
+/// [BackupService.refreshStats] on app startup or
+/// [BackupService.invalidateAndRefresh] after mutations.
+class SettingsStatsCard extends StatelessWidget {
+  const SettingsStatsCard({super.key});
 
-  /// A future that resolves to a [StorageStats] snapshot. The widget
-  /// re-runs the future every time it is reparented with a new
-  /// [Future] instance, so callers can pass a freshly-built future
-  /// after operations that change counts.
-  final Future<StorageStats> future;
-
-  @override
-  State<SettingsStatsCard> createState() => _SettingsStatsCardState();
-}
-
-class _SettingsStatsCardState extends State<SettingsStatsCard> {
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final backup = context.read<BackupService>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: FutureBuilder<StorageStats>(
-        future: widget.future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return _shell(
-              colors,
-              child: const Center(
-                child: SizedBox(
-                  height: 36,
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-            );
-          }
-          final stats = snapshot.data;
+      child: ValueListenableBuilder<StorageStats?>(
+        valueListenable: backup.statsNotifier,
+        builder: (context, stats, _) {
+          final colors = Theme.of(context).colorScheme;
           return _shell(
             colors,
             child: Row(

@@ -38,11 +38,7 @@ class ReminderRepository {
   }
 
   Future<void> delete(String id) async {
-    await _database.db.delete(
-      'reminders',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _database.db.delete('reminders', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<int> count() async {
@@ -50,6 +46,13 @@ class ReminderRepository {
       'SELECT COUNT(*) AS cnt FROM reminders',
     );
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Returns just the primary keys, used by import paths that need to
+  /// dedup against existing rows without paying for full-row materialisation.
+  Future<Set<String>> listIds() async {
+    final rows = await _database.db.query('reminders', columns: ['id']);
+    return {for (final row in rows) row['id'] as String};
   }
 
   /// Removes every row from the reminders table. Used by the data

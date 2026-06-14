@@ -17,18 +17,21 @@ class AiSettingsPage extends StatefulWidget {
 class _AiSettingsPageState extends State<AiSettingsPage> {
   final TextEditingController _controller = TextEditingController();
   bool _obscure = true;
-  bool _hydrated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seed the controller once from the view model so the build method
+    // stays free of side effects. Subsequent edits live in the controller
+    // until the user explicitly saves or clears.
+    final stored = context.read<SettingsViewModel>().settings.aiApiKey;
+    _controller.text = stored ?? '';
+  }
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
-  }
-
-  void _hydrateFromSettings(String? stored) {
-    if (_hydrated) return;
-    _hydrated = true;
-    _controller.text = stored ?? '';
   }
 
   String? _maskedPreview(String key) {
@@ -62,7 +65,6 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         child: Consumer<SettingsViewModel>(
           builder: (context, vm, _) {
             final stored = vm.settings.aiApiKey;
-            _hydrateFromSettings(stored);
             final isConfigured = stored != null;
             return ListView(
               padding: const EdgeInsets.all(16),

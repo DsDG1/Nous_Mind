@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:ui';
 
@@ -117,15 +118,27 @@ class RemindersApp extends StatefulWidget {
 
 class _RemindersAppState extends State<RemindersApp>
     with WidgetsBindingObserver {
+  late final BackupService _backup;
+
   @override
   void initState() {
     super.initState();
+    _backup = BackupService(
+      reminderRepository: widget.reminderRepository,
+      inspirationRepository: widget.inspirationRepository,
+      settingsRepository: widget.settingsRepository,
+      imageStore: widget.imageStore,
+    );
+    // Warm the stats cache so the settings page can paint real numbers
+    // on its first entry instead of the dash placeholder.
+    unawaited(_backup.refreshStats());
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _backup.dispose();
     super.dispose();
   }
 
@@ -198,21 +211,18 @@ class _RemindersAppState extends State<RemindersApp>
         Provider<AiAnalyzer>.value(value: widget.aiAnalyzer),
         Provider<InspirationImageStore>.value(value: widget.imageStore),
         Provider<NotificationService>.value(value: widget.notifications),
-        Provider<BackupService>(
-          create: (_) => BackupService(
-            reminderRepository: widget.reminderRepository,
-            inspirationRepository: widget.inspirationRepository,
-            settingsRepository: widget.settingsRepository,
-            imageStore: widget.imageStore,
-          ),
-        ),
+        Provider<BackupService>.value(value: _backup),
       ],
-      child: Consumer<SettingsViewModel>(
-        builder: (context, vm, _) {
-          final seed = vm.settings.seedColor.color;
+      child: Selector<SettingsViewModel, _ThemeTuple>(
+        selector: (_, vm) => _ThemeTuple(
+          mode: vm.settings.themeMode,
+          seed: vm.settings.seedColor,
+        ),
+        builder: (context, selected, _) {
+          final seed = selected.seed.color;
           return MaterialApp.router(
             title: '提醒事项',
-            themeMode: vm.settings.themeMode,
+            themeMode: selected.mode,
             theme: ThemeData(
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(seedColor: seed),
@@ -230,6 +240,22 @@ class _RemindersAppState extends State<RemindersApp>
       ),
     );
   }
+}
+
+/// Selector key used by the outer [MaterialApp.router] so only theme-relevant
+/// changes from [SettingsViewModel] rebuild the entire app shell.
+class _ThemeTuple {
+  const _ThemeTuple({required this.mode, required this.seed});
+
+  final ThemeMode mode;
+  final AppSeedColor seed;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _ThemeTuple && other.mode == mode && other.seed == seed;
+
+  @override
+  int get hashCode => Object.hash(mode, seed);
 }
 
 class _DatabaseErrorApp extends StatelessWidget {

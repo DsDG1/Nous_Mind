@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -121,6 +122,12 @@ class _VersionSection extends StatelessWidget {
           onTap: () => _copyToClipboard(context, '构建号 $build'),
         ),
         SettingsTile(
+          leading: const Icon(Icons.update),
+          title: '更新日志',
+          subtitle: '查看版本更新内容',
+          onTap: () => _showChangelog(context),
+        ),
+        SettingsTile(
           leading: const Icon(Icons.description_outlined),
           title: '开源许可',
           subtitle: '查看本应用使用的第三方库的许可',
@@ -149,9 +156,104 @@ class _VersionSection extends StatelessWidget {
       ),
     );
   }
+
+  void _showChangelog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('更新日志'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              for (final entry in _changelog) _ChangelogEntry(entry: entry),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Single version's release notes. Kept as a plain immutable record so the
+/// changelog can grow as a static list ordered newest-first.
+class _ChangelogVersion {
+  const _ChangelogVersion({required this.version, required this.notes});
+
+  final String version;
+  final List<String> notes;
+}
+
+/// Newest-first list of human-facing release notes. Keep entries brief —
+/// the dialog wraps them in a scrolling column but it should fit on one
+/// screen for the latest version.
+const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
+  _ChangelogVersion(
+    version: '1.1.1',
+    notes: <String>[
+      '优化设置页性能,切换设置不再卡顿',
+      '备份导入改用批量事务,大备份导入大幅加速',
+      '备份导出改在后台线程编码,UI 不再阻塞',
+      '错误日志复制改为异步处理',
+    ],
+  ),
+  _ChangelogVersion(
+    version: '1.1.0',
+    notes: <String>[
+      '新增 AI 助手:接入 DeepSeek,可从文本与截图自动解析提醒',
+      '数据持久化迁移到 SQLite,启动与查询更快',
+      '设置页重做:外观、通知、数据、AI、关于五个子页',
+      '新增数据备份与恢复(导出/导入 JSON)',
+      '新增错误日志收集,可在"关于"页查看与复制',
+      '提醒支持附加图片,通知点击可直接查看',
+      '通知设置精简:免打扰时段、贪睡时长、震动开关',
+    ],
+  ),
+];
+
+/// Renders one version block (header + bullet list) inside the changelog dialog.
+class _ChangelogEntry extends StatelessWidget {
+  const _ChangelogEntry({required this.entry});
+
+  final _ChangelogVersion entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'v${entry.version}',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          for (final note in entry.notes)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text('• $note', style: textTheme.bodySmall),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Section showing the collected errors, plus copy / clear actions.
+///
+/// The header tile subscribes via [Selector] to just `(isEmpty, count)` so
+/// it does not rebuild for unrelated [ErrorLogService] notifications. The
+/// action rows + recent entries still use a [Consumer] because they need
+/// the full service to invoke handlers and iterate the entries list.
 class _ErrorLogSection extends StatelessWidget {
   const _ErrorLogSection();
 
@@ -161,28 +263,33 @@ class _ErrorLogSection extends StatelessWidget {
       title: '错误日志',
       icon: Icons.bug_report_outlined,
       children: <Widget>[
+        Selector<ErrorLogService, _LogHeader>(
+          selector: (_, log) =>
+              _LogHeader(isEmpty: log.isEmpty, count: log.count),
+          builder: (context, header, _) {
+            return SettingsTile(
+              leading: const Icon(Icons.list_alt),
+              title: '已收集错误',
+              subtitle: header.isEmpty ? '暂无错误' : '共 ${header.count} 条',
+            );
+          },
+        ),
         Consumer<ErrorLogService>(
           builder: (context, log, _) {
+            if (log.isEmpty) return const SizedBox.shrink();
             return Column(
               children: <Widget>[
                 SettingsTile(
-                  leading: const Icon(Icons.list_alt),
-                  title: '已收集错误',
-                  subtitle: log.isEmpty ? '暂无错误' : '共 ${log.count} 条',
+                  leading: const Icon(Icons.copy_outlined),
+                  title: '复制全部日志',
+                  onTap: () => _copyAll(context, log),
                 ),
-                if (!log.isEmpty) ...<Widget>[
-                  SettingsTile(
-                    leading: const Icon(Icons.copy_outlined),
-                    title: '复制全部日志',
-                    onTap: () => _copyAll(context, log),
-                  ),
-                  SettingsTile(
-                    leading: const Icon(Icons.delete_outline),
-                    title: '清空日志',
-                    onTap: () => _confirmClear(context, log),
-                  ),
-                  ...log.entries.take(5).map((e) => _ErrorEntryCard(entry: e)),
-                ],
+                SettingsTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: '清空日志',
+                  onTap: () => _confirmClear(context, log),
+                ),
+                ...log.entries.take(5).map((e) => _ErrorEntryCard(entry: e)),
               ],
             );
           },
@@ -192,12 +299,15 @@ class _ErrorLogSection extends StatelessWidget {
   }
 
   Future<void> _copyAll(BuildContext context, ErrorLogService log) async {
-    final text = log.entries.map((e) => e.format()).join('\n\n');
+    // Capture a snapshot so the isolate input is stable even if a new
+    // entry lands while we are formatting.
+    final entries = log.entries.toList(growable: false);
+    final text = await compute(_formatLogEntries, entries);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('日志已复制')));
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('日志已复制')));
   }
 
   Future<void> _confirmClear(BuildContext context, ErrorLogService log) async {
@@ -222,6 +332,30 @@ class _ErrorLogSection extends StatelessWidget {
       log.clear();
     }
   }
+}
+
+/// Joins every captured entry into a single clipboard-ready string. Runs in
+/// a background isolate via [compute] so a full 200-entry buffer with stack
+/// traces does not stall the UI thread.
+String _formatLogEntries(List<ErrorLogEntry> entries) {
+  return entries.map((e) => e.format()).join('\n\n');
+}
+
+/// Selector key for the error-log header tile. Two scalar fields with
+/// explicit value equality so [Selector] only triggers a rebuild when the
+/// count or empty state actually changes.
+class _LogHeader {
+  const _LogHeader({required this.isEmpty, required this.count});
+
+  final bool isEmpty;
+  final int count;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _LogHeader && other.isEmpty == isEmpty && other.count == count;
+
+  @override
+  int get hashCode => Object.hash(isEmpty, count);
 }
 
 /// Compact card rendering one captured error entry.
