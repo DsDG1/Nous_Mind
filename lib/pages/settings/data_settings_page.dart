@@ -52,9 +52,14 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     try {
       final file = await backup.exportToFile();
       if (!mounted) return;
-      await Share.shareXFiles(<XFile>[
-        XFile(file.path, mimeType: 'application/json'),
-      ], text: 'Nous 记事 备份');
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[
+            XFile(file.path, mimeType: 'application/json'),
+          ],
+          text: 'Nous 记事 备份',
+        ),
+      );
     } on Exception catch (error) {
       messenger
         ..hideCurrentSnackBar()
@@ -68,7 +73,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
 
   Future<void> _import() async {
     if (_busy) return;
-    final picked = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: <String>['json'],
     );

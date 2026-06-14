@@ -254,6 +254,13 @@ class _ChangelogVersion {
 /// shipping a new version; the rest of the page renders from here.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.2.4',
+    notes: <String>[
+      '升级多项第三方依赖至最新版，适配新版 API',
+      '修复 Android release 构建失败问题',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.2.3',
     notes: <String>['「更新日志」改造为独立整页,支持一键复制全部与单条复制'],
   ),
