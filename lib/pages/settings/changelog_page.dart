@@ -254,6 +254,15 @@ class _ChangelogVersion {
 /// shipping a new version; the rest of the page renders from here.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.2.6',
+    notes: <String>[
+      '提醒新增描述字段,通知内容更详细',
+      '描述支持 AI 一键润色,自动改顺口、整结构、轻微优化措辞',
+      '通知新增「稍后提醒」与「完成」按钮,无需打开 App 即可处理',
+      '修复提醒弹窗的「稍后提醒」按钮时长与设置不一致的问题',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.2.5',
     notes: <String>[
       '新增本地中文 OCR 识别能力,可在「设置 → AI → 本地 OCR」启用,模型随 App 打包,离线可用,失败时自动回退到拉丁文识别',
