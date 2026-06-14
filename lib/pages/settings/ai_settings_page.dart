@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../viewmodels/settings_view_model.dart';
 import '../../widgets/settings_section.dart';
@@ -17,6 +18,14 @@ class AiSettingsPage extends StatefulWidget {
 class _AiSettingsPageState extends State<AiSettingsPage> {
   final TextEditingController _controller = TextEditingController();
   bool _obscure = true;
+
+  /// DeepSeek's public Chinese API documentation. Surfaced as a tutorial
+  /// shortcut on this page so first-time users can quickly look up how to
+  /// obtain a key, which models are available, and what each request
+  /// parameter means.
+  static final Uri _tutorialUri = Uri.parse(
+    'https://api-docs.deepseek.com/zh-cn/',
+  );
 
   @override
   void initState() {
@@ -54,6 +63,21 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('已清除')));
+  }
+
+  /// Opens the DeepSeek docs in the system browser. `externalApplication`
+  /// is preferred over an in-app webview so users land in a familiar
+  /// browsing environment that can sign in to their DeepSeek account.
+  Future<void> _openTutorial() async {
+    final ok = await launchUrl(
+      _tutorialUri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('无法打开浏览器')));
+    }
   }
 
   @override
@@ -122,6 +146,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                         ],
                       ),
                     ),
+                    ListTile(
+                      leading: const Icon(Icons.menu_book_outlined),
+                      title: const Text('查看 DeepSeek 文档教程'),
+                      subtitle: const Text('了解如何获取 API 密钥、可用模型与参数'),
+                      trailing: const Icon(Icons.open_in_new, size: 18),
+                      onTap: _openTutorial,
+                    ),
                     const Padding(
                       padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
                       child: SelectableText(
@@ -147,6 +178,32 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                           'AI 助手使用 DeepSeek-V4 Flash 解析文本与截图,'
                           '需要联网。',
                           style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: colors.onErrorContainer,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'AI 生成内容可能不准确或不完整,请自行核对,使用风险自负。',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colors.onErrorContainer,
+                          ),
                         ),
                       ),
                     ],
