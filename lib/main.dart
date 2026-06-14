@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:nested/nested.dart';
 import 'package:provider/provider.dart';
@@ -67,7 +68,10 @@ Future<void> main() async {
   final inspirationRepository = InspirationRepository(database);
   final imageStore = await InspirationImageStore.create();
   final notifications = NotificationService();
-  await notifications.init(onTapNotification: () => router.go('/'));
+  await notifications.init(
+    onTapBody: () => router.go('/'),
+    onAction: _handleNotificationAction,
+  );
   final timezone = await _readTimezone();
 
   // Install the Quick Settings Tile bridge before runApp so the native
@@ -103,6 +107,54 @@ Future<String> _readTimezone() async {
     return info.identifier;
   } on Exception {
     return 'UTC';
+  }
+}
+
+/// Routes a notification action button press to the right
+/// [RemindersViewModel] call. Snooze pushes the reminder's fire time
+/// forward by the user's current [SnoozeDuration] and re-schedules;
+/// complete deletes the reminder outright — matching the existing
+/// 24-hour auto-delete semantics so a "done" press has the same
+/// effect as the reminder expiring naturally.
+///
+/// The handler runs in two cases:
+///  1. The app is in the foreground when the user taps the action.
+///  2. The app was cold-launched by the action (handled inside
+///     [NotificationService.init] via `getNotificationAppLaunchDetails`).
+///
+/// In both cases the Provider tree may or may not be mounted yet at
+/// the very first frame; the helper gracefully no-ops if it cannot
+/// find the view model.
+void _handleNotificationAction(NotificationResponse response) {
+  final action = response.actionId;
+  final reminderId = response.payload;
+  if (action == null || reminderId == null || reminderId.isEmpty) return;
+  final navigatorContext = rootNavigatorKey.currentContext;
+  if (navigatorContext == null) return;
+  final reminders = Provider.of<RemindersViewModel>(
+    navigatorContext,
+    listen: false,
+  );
+  final settings = Provider.of<SettingsViewModel>(
+    navigatorContext,
+    listen: false,
+  );
+  final messenger = ScaffoldMessenger.of(navigatorContext);
+  switch (action) {
+    case NotificationService.kSnoozeActionId:
+      unawaited(
+        reminders.snoozeReminder(
+          reminderId,
+          settings.settings.snoozeDuration.duration,
+        ),
+      );
+      break;
+    case NotificationService.kCompleteActionId:
+      unawaited(reminders.delete(reminderId));
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('已从列表中移除')));
+      break;
   }
 }
 
@@ -200,6 +252,8 @@ class _RemindersAppState extends State<RemindersApp>
               showReminderPopup(
                 context: navigatorState.context,
                 title: reminder.title,
+                description: reminder.description,
+                snoozeLabel: '稍后提醒（${settings.settings.snoozeDuration.label}）',
                 onSnooze: () => vm.snoozeReminder(
                   reminder.id,
                   settings.settings.snoozeDuration.duration,
