@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Quick Settings Tile label, surfaced in the shade's edit screen. -->
+    <string name="tile_quick_add_label">快速添加提醒</string>
+</resources>

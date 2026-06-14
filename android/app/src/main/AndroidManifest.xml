@@ -35,6 +35,26 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!--
+            Quick Settings Tile: "Quick Add Reminder". Non-toggleable
+            action tile that opens MainActivity with the
+            OPEN_QUICK_ADD extra, which the Dart side consumes via
+            MethodChannel("quick_settings_tile").
+        -->
+        <service
+            android:name=".QuickAddTileService"
+            android:label="@string/tile_quick_add_label"
+            android:icon="@drawable/ic_tile_quick_add"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="false" />
+        </service>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

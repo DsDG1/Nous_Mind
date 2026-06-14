@@ -16,6 +16,7 @@ import 'services/error_log_service.dart';
 import 'services/inspiration_image_store.dart';
 import 'services/inspiration_repository.dart';
 import 'services/notification_service.dart';
+import 'services/quick_settings_tile_bridge.dart';
 import 'services/reminder_repository.dart';
 import 'services/settings_repository.dart';
 import 'viewmodels/ai_assist_view_model.dart';
@@ -67,6 +68,14 @@ Future<void> main() async {
   final notifications = NotificationService();
   await notifications.init(onTapNotification: () => router.go('/'));
   final timezone = await _readTimezone();
+
+  // Install the Quick Settings Tile bridge before runApp so the native
+  // → Dart hot-path handler is registered in time for any click that
+  // arrives via MainActivity.onNewIntent while the app is already
+  // running. The cold-start case is handled by the post-frame
+  // consumePending() below.
+  QuickSettingsTileBridge.instance.init(onOpenCreate: navigateToQuickAddEditor);
+
   runApp(
     RemindersApp(
       settingsRepository: settingsRepository,
@@ -79,6 +88,12 @@ Future<void> main() async {
       timezone: timezone,
     ),
   );
+
+  // Drain any Quick Settings Tile click that landed before Dart was
+  // alive. The post-frame callback ensures the router is mounted.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(QuickSettingsTileBridge.instance.consumePending());
+  });
 }
 
 Future<String> _readTimezone() async {
