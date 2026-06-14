@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -29,6 +30,12 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
   void initState() {
     super.initState();
     _refreshStats();
+    // Refresh the trash count whenever the page becomes visible so the
+    // tile subtitle matches the actual on-disk state. The router pushes
+    // us back here when the user returns from the trash page; using a
+    // `didChangeDependencies` would also work but `initState` covers
+    // the first paint and a manual refresh after navigation covers
+    // the rest.
   }
 
   Future<void> _refreshStats() async {
@@ -42,6 +49,20 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       _stats = stats;
       _loadingStats = false;
     });
+  }
+
+  Future<void> _refreshTrashCount() async {
+    // Cheap refresh that only re-counts the trash. We do this on every
+    // build via a Selector below, so calling it manually is only needed
+    // when we return from the trash page (which is handled by the
+    // route-pop callback in `_openTrash`).
+    await context.read<RemindersViewModel>().refreshTrashCount();
+  }
+
+  Future<void> _openTrash() async {
+    await context.push<void>('/settings/data/trash');
+    if (!mounted) return;
+    await _refreshTrashCount();
   }
 
   Future<void> _export() async {
@@ -141,23 +162,40 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     );
   }
 
-  Future<void> _clearReminders() async {
+  Future<void> _clearRemindersToTrash() async {
     if (_busy) return;
-    final confirmed = await _confirmBulk(
-      title: '清空所有提醒？',
-      message: '所有提醒及其图片将被永久删除。此操作不可撤销。',
-    );
-    if (confirmed != true || !mounted) return;
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final remindersVm = context.read<RemindersViewModel>();
+    // Snapshot the current list so the SnackBar's "撤销" button can
+    // ask the view model to restore the same set in one click.
+    final snapshot = List<String>.from(remindersVm.reminders.map((r) => r.id));
     try {
-      final removed = await remindersVm.clearAll();
+      final moved = await remindersVm.clearAllToTrash();
       await _refreshStats();
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('已删除 $removed 条提醒')));
+        ..showSnackBar(
+          SnackBar(
+            content: Text('已移入回收站 $moved 条提醒'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: '撤销',
+              onPressed: () async {
+                for (final id in snapshot) {
+                  await remindersVm.restore(id);
+                }
+                if (!mounted) return;
+                messenger
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    SnackBar(content: Text('已恢复 ${snapshot.length} 条')),
+                  );
+              },
+            ),
+          ),
+        );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -256,6 +294,26 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                 ],
               ),
               SettingsSection(
+                title: '回收站',
+                icon: Icons.delete_outline,
+                children: <Widget>[
+                  Selector<RemindersViewModel, int>(
+                    selector: (_, vm) => vm.trashCount,
+                    builder: (context, trashCount, _) {
+                      final subtitle = trashCount == 0
+                          ? '已删提醒会在此保留 30 天'
+                          : '$trashCount 项 · 最早将在 1 天后清除';
+                      return SettingsTile(
+                        leading: const Icon(Icons.restore_from_trash_outlined),
+                        title: '回收站',
+                        subtitle: subtitle,
+                        onTap: _busy ? null : _openTrash,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              SettingsSection(
                 title: '备份与恢复',
                 icon: Icons.import_export,
                 children: <Widget>[
@@ -278,10 +336,10 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                 icon: Icons.delete_sweep_outlined,
                 children: <Widget>[
                   SettingsTile(
-                    leading: const Icon(Icons.notifications_off_outlined),
-                    title: '清空所有提醒',
-                    subtitle: '永久删除所有提醒与附图',
-                    onTap: _busy ? null : _clearReminders,
+                    leading: const Icon(Icons.restore_from_trash_outlined),
+                    title: '全部移入回收站',
+                    subtitle: '可从回收站恢复 30 天',
+                    onTap: _busy ? null : _clearRemindersToTrash,
                   ),
                   SettingsTile(
                     leading: const Icon(Icons.lightbulb_outline),

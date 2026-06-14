@@ -17,6 +17,7 @@ import 'pages/settings/data_settings_page.dart';
 import 'pages/settings/local_ocr_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings/about_settings_page.dart';
+import 'pages/settings/trash_page.dart';
 import 'pages/settings_page.dart';
 import 'widgets/circular_reveal_clip.dart';
 
@@ -130,6 +131,12 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'data',
                   builder: (context, state) => const DataSettingsPage(),
+                  routes: <RouteBase>[
+                    GoRoute(
+                      path: 'trash',
+                      builder: (context, state) => const TrashPage(),
+                    ),
+                  ],
                 ),
                 GoRoute(
                   path: 'ai',

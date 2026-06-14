@@ -53,8 +53,12 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text('已删除「${reminder.title}」'),
-          duration: const Duration(seconds: 2),
+          content: Text('已移入回收站「${reminder.title}」'),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: '撤销',
+            onPressed: () => viewModel.restore(reminder.id),
+          ),
         ),
       );
   }

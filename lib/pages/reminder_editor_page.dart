@@ -213,6 +213,12 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         description: description.isEmpty ? null : description,
       );
     } else {
+      // Editing a reminder that was sitting in the trash is treated
+      // as an implicit restore: the user is actively engaging with
+      // the row, so dropping it back into the active list is what
+      // they almost certainly want. The save path therefore clears
+      // the soft-delete flags; the trash page's "全部恢复" action
+      // remains available for one-shot bulk restores.
       await viewModel.update(
         existing.copyWith(
           title: title,
@@ -220,6 +226,8 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
           imagePath: newImagePath,
           description: description.isEmpty ? null : description,
           clearDescription: description.isEmpty,
+          isDeleted: false,
+          clearDeletedAt: true,
         ),
       );
       if (previousImagePath != null && previousImagePath != newImagePath) {

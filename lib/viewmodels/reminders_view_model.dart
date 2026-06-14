@@ -109,6 +109,19 @@ class RemindersViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Fetches the trashed reminders from the database. Used by the
+  /// trash page; intentionally not cached on the view model because
+  /// the page is the only consumer and the list can be large.
+  /// The cached [trashCount] is refreshed as a side effect so the
+  /// data-settings tile does not show a stale value while the user
+  /// is on the trash page.
+  Future<List<Reminder>> refreshAndFetchTrash() async {
+    final items = await _repository.getAllTrash();
+    _trashCount = items.length;
+    notifyListeners();
+    return items;
+  }
+
   Future<void> _rescheduleAll() async {
     final now = DateTime.now();
     for (final reminder in _reminders) {
