@@ -50,7 +50,7 @@ class SettingsPage extends StatelessWidget {
                     ),
                     SettingsTile(
                       title: 'AI 助手',
-                      subtitle: settings.aiApiKey == null ? '未配置' : '已配置',
+                      subtitle: _aiSubtitle(settings),
                       leading: const Icon(Icons.auto_awesome_outlined),
                       onTap: () => context.push('/settings/ai'),
                     ),
@@ -86,6 +86,12 @@ class SettingsPage extends StatelessWidget {
     parts.add('贪睡 ${settings.snoozeDuration.duration.inMinutes} 分钟');
     return parts.join(' · ');
   }
+
+  static String _aiSubtitle(_SettingsForSubtitle settings) {
+    if (!settings.aiAssistantEnabled) return '未启用';
+    if (settings.aiApiKey == null) return '已启用 · 未填密钥';
+    return '已启用';
+  }
 }
 
 /// Selector key that holds only the fields the settings home renders, so the
@@ -99,6 +105,7 @@ class _SettingsForSubtitle {
     required this.vibrationEnabled,
     required this.quietHoursEnabled,
     required this.snoozeDuration,
+    required this.aiAssistantEnabled,
     required this.aiApiKey,
   });
 
@@ -109,6 +116,7 @@ class _SettingsForSubtitle {
       vibrationEnabled: settings.vibrationEnabled,
       quietHoursEnabled: settings.quietHoursEnabled,
       snoozeDuration: settings.snoozeDuration,
+      aiAssistantEnabled: settings.aiAssistantEnabled,
       aiApiKey: settings.aiApiKey,
     );
   }
@@ -118,6 +126,7 @@ class _SettingsForSubtitle {
   final bool vibrationEnabled;
   final bool quietHoursEnabled;
   final SnoozeDuration snoozeDuration;
+  final bool aiAssistantEnabled;
   final String? aiApiKey;
 
   @override
@@ -128,6 +137,7 @@ class _SettingsForSubtitle {
       other.vibrationEnabled == vibrationEnabled &&
       other.quietHoursEnabled == quietHoursEnabled &&
       other.snoozeDuration == snoozeDuration &&
+      other.aiAssistantEnabled == aiAssistantEnabled &&
       other.aiApiKey == aiApiKey;
 
   @override
@@ -137,6 +147,7 @@ class _SettingsForSubtitle {
     vibrationEnabled,
     quietHoursEnabled,
     snoozeDuration,
+    aiAssistantEnabled,
     aiApiKey,
   );
 }

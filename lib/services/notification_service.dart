@@ -62,7 +62,10 @@ class NotificationService {
       requestSoundPermission: false,
     );
     await _plugin.initialize(
-      settings: const InitializationSettings(android: androidInit, iOS: darwinInit),
+      settings: const InitializationSettings(
+        android: androidInit,
+        iOS: darwinInit,
+      ),
       onDidReceiveNotificationResponse: (response) {
         onTapNotification();
       },

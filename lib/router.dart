@@ -11,6 +11,8 @@ import 'pages/reminder_editor_page.dart';
 import 'pages/reminders_home_page.dart';
 import 'pages/settings/ai_settings_page.dart';
 import 'pages/settings/appearance_settings_page.dart';
+import 'pages/settings/changelog_page.dart';
+import 'pages/settings/deepseek_settings_page.dart';
 import 'pages/settings/data_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings/about_settings_page.dart';
@@ -131,6 +133,16 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'ai',
                   builder: (context, state) => const AiSettingsPage(),
+                  routes: <RouteBase>[
+                    GoRoute(
+                      path: 'deepseek',
+                      builder: (context, state) => const DeepSeekSettingsPage(),
+                    ),
+                  ],
+                ),
+                GoRoute(
+                  path: 'changelog',
+                  builder: (context, state) => const ChangelogPage(),
                 ),
                 GoRoute(
                   path: 'about',

@@ -49,6 +49,12 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> setAutoDeleteAfter24h(bool value) =>
       _update(_settings.copyWith(autoDeleteAfter24h: value));
 
+  /// Toggles the user-facing "AI assistant is enabled" switch. Independent
+  /// of [setAiApiKey] — the API key is preserved when the assistant is
+  /// disabled, so re-enabling later does not require re-entering it.
+  Future<void> setAiAssistantEnabled(bool value) =>
+      _update(_settings.copyWith(aiAssistantEnabled: value));
+
   /// Persists the AI assistant API key. Whitespace-only values and `null`
   /// both clear the key, so the storage layer never sees a blank string.
   Future<void> setAiApiKey(String? value) => _update(

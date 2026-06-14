@@ -54,34 +54,40 @@ void main() {
   });
 
   group('BackupService', () {
-    test('exports reminders, inspirations, and settings to a JSON file',
-        () async {
-      await reminders.insert(
-        Reminder(
-          id: 'r-1',
-          title: 'Buy milk',
-          reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
-        ),
-      );
-      await inspirations.insert(
-        Inspiration(
-          id: 'i-1',
-          text: 'Read a book',
-          createdAt: DateTime.utc(2026, 6, 13, 9, 0),
-        ),
-      );
-      await settings.save(
-        (await settings.load()).copyWith(aiApiKey: 'sk-test'),
-      );
+    test(
+      'exports reminders, inspirations, and settings to a JSON file',
+      () async {
+        await reminders.insert(
+          Reminder(
+            id: 'r-1',
+            title: 'Buy milk',
+            reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
+          ),
+        );
+        await inspirations.insert(
+          Inspiration(
+            id: 'i-1',
+            text: 'Read a book',
+            createdAt: DateTime.utc(2026, 6, 13, 9, 0),
+          ),
+        );
+        await settings.save(
+          (await settings.load()).copyWith(
+            aiAssistantEnabled: true,
+            aiApiKey: 'sk-test',
+          ),
+        );
 
-      final file = await backup.exportToFile();
-      expect(file.existsSync(), isTrue);
-      final content = await file.readAsString();
-      expect(content, contains('Buy milk'));
-      expect(content, contains('Read a book'));
-      expect(content, contains('sk-test'));
-      expect(content, contains('"version": 1'));
-    });
+        final file = await backup.exportToFile();
+        expect(file.existsSync(), isTrue);
+        final content = await file.readAsString();
+        expect(content, contains('Buy milk'));
+        expect(content, contains('Read a book'));
+        expect(content, contains('sk-test'));
+        expect(content, contains('"ai_assistant_enabled": true'));
+        expect(content, contains('"version": 1'));
+      },
+    );
 
     test('imports reminders and inspirations, skipping duplicates', () async {
       await reminders.insert(
@@ -154,39 +160,42 @@ void main() {
       expect(backup.importFromFile(file), throwsFormatException);
     });
 
-    test('getStats counts records and reports zero images by default',
-        () async {
-      await reminders.insert(
-        Reminder(
-          id: 'r-1',
-          title: 'One',
-          reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
-        ),
-      );
-      await reminders.insert(
-        Reminder(
-          id: 'r-2',
-          title: 'Two',
-          reminderTime: DateTime.utc(2026, 6, 13, 11, 0),
-        ),
-      );
-      await inspirations.insert(
-        Inspiration(
-          id: 'i-1',
-          text: 'Idea',
-          createdAt: DateTime.utc(2026, 6, 13, 9, 0),
-        ),
-      );
+    test(
+      'getStats counts records and reports zero images by default',
+      () async {
+        await reminders.insert(
+          Reminder(
+            id: 'r-1',
+            title: 'One',
+            reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
+          ),
+        );
+        await reminders.insert(
+          Reminder(
+            id: 'r-2',
+            title: 'Two',
+            reminderTime: DateTime.utc(2026, 6, 13, 11, 0),
+          ),
+        );
+        await inspirations.insert(
+          Inspiration(
+            id: 'i-1',
+            text: 'Idea',
+            createdAt: DateTime.utc(2026, 6, 13, 9, 0),
+          ),
+        );
 
-      final stats = await backup.getStats();
-      expect(stats.reminderCount, 2);
-      expect(stats.inspirationCount, 1);
-      expect(stats.imageBytes, 0);
-    });
+        final stats = await backup.getStats();
+        expect(stats.reminderCount, 2);
+        expect(stats.inspirationCount, 1);
+        expect(stats.imageBytes, 0);
+      },
+    );
   });
 }
 
-class _TempPathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin {
+class _TempPathProvider extends PathProviderPlatform
+    with MockPlatformInterfaceMixin {
   _TempPathProvider(this.dir);
 
   final Directory dir;

@@ -141,6 +141,7 @@ class AppSettings {
     this.quietHours = const QuietHoursWindow(),
     this.snoozeDuration = const SnoozeDuration(),
     this.autoDeleteAfter24h = true,
+    this.aiAssistantEnabled = false,
     this.aiApiKey,
   });
 
@@ -156,6 +157,13 @@ class AppSettings {
   /// resume. Anchored to scheduled time, not creation or fire time.
   final bool autoDeleteAfter24h;
 
+  /// Whether the user has opted in to using the AI assistant. Independent
+  /// of [aiApiKey]: a key may still be stored while this is `false`, in
+  /// which case the AI flows treat the assistant as unconfigured. The
+  /// field defaults to `false` for new users and for old databases that
+  /// pre-date this field, with no implicit migration from "has key".
+  final bool aiAssistantEnabled;
+
   /// API key for the AI assistant backend. `null` when the user has not
   /// configured one. Whitespace-only values are normalized to `null` at
   /// both write time and read time, so the storage layer never sees a
@@ -170,6 +178,7 @@ class AppSettings {
     QuietHoursWindow? quietHours,
     SnoozeDuration? snoozeDuration,
     bool? autoDeleteAfter24h,
+    bool? aiAssistantEnabled,
     String? aiApiKey,
   }) {
     return AppSettings(
@@ -180,6 +189,7 @@ class AppSettings {
       quietHours: quietHours ?? this.quietHours,
       snoozeDuration: snoozeDuration ?? this.snoozeDuration,
       autoDeleteAfter24h: autoDeleteAfter24h ?? this.autoDeleteAfter24h,
+      aiAssistantEnabled: aiAssistantEnabled ?? this.aiAssistantEnabled,
       aiApiKey: aiApiKey ?? this.aiApiKey,
     );
   }
@@ -192,6 +202,7 @@ class AppSettings {
     'quiet_hours': quietHours.toJson(),
     'snooze_duration': snoozeDuration.toJson(),
     'auto_delete_after_24h': autoDeleteAfter24h,
+    'ai_assistant_enabled': aiAssistantEnabled,
     if (aiApiKey != null) 'ai_api_key': aiApiKey,
   };
 
@@ -230,6 +241,7 @@ class AppSettings {
             const <String, dynamic>{},
       ),
       autoDeleteAfter24h: (json['auto_delete_after_24h'] as bool?) ?? true,
+      aiAssistantEnabled: (json['ai_assistant_enabled'] as bool?) ?? false,
       aiApiKey: _normalizeApiKey(json['ai_api_key']),
     );
   }

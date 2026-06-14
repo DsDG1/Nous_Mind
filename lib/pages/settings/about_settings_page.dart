@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
@@ -125,7 +126,7 @@ class _VersionSection extends StatelessWidget {
           leading: const Icon(Icons.update),
           title: '更新日志',
           subtitle: '查看版本更新内容',
-          onTap: () => _showChangelog(context),
+          onTap: () => context.push('/settings/changelog'),
         ),
         SettingsTile(
           leading: const Icon(Icons.description_outlined),
@@ -153,109 +154,6 @@ class _VersionSection extends StatelessWidget {
       applicationIcon: const Padding(
         padding: EdgeInsets.all(8),
         child: Icon(Icons.notifications_active, size: 40),
-      ),
-    );
-  }
-
-  void _showChangelog(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('更新日志'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              for (final entry in _changelog) _ChangelogEntry(entry: entry),
-            ],
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('关闭'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Single version's release notes. Kept as a plain immutable record so the
-/// changelog can grow as a static list ordered newest-first.
-class _ChangelogVersion {
-  const _ChangelogVersion({required this.version, required this.notes});
-
-  final String version;
-  final List<String> notes;
-}
-
-/// Newest-first list of human-facing release notes. Keep entries brief —
-/// the dialog wraps them in a scrolling column but it should fit on one
-/// screen for the latest version.
-const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
-  _ChangelogVersion(
-    version: '1.2.1',
-    notes: <String>[
-      '修复快速添加提醒磁贴在某些设备上无法打开应用的问题',
-    ],
-  ),
-  _ChangelogVersion(
-    version: '1.2.0',
-    notes: <String>[
-      '新增快速添加提醒磁贴,可在通知栏快速创建提醒',
-      '新增 DeepSeek 教程链接和 AI 风险提示',
-    ],
-  ),
-  _ChangelogVersion(
-    version: '1.1.1',
-    notes: <String>[
-      '优化设置页性能,切换设置不再卡顿',
-      '备份导入改用批量事务,大备份导入大幅加速',
-      '备份导出改在后台线程编码,UI 不再阻塞',
-      '错误日志复制改为异步处理',
-    ],
-  ),
-  _ChangelogVersion(
-    version: '1.1.0',
-    notes: <String>[
-      '新增 AI 助手:接入 DeepSeek,可从文本与截图自动解析提醒',
-      '数据持久化迁移到 SQLite,启动与查询更快',
-      '设置页重做:外观、通知、数据、AI、关于五个子页',
-      '新增数据备份与恢复(导出/导入 JSON)',
-      '新增错误日志收集,可在"关于"页查看与复制',
-      '提醒支持附加图片,通知点击可直接查看',
-      '通知设置精简:免打扰时段、贪睡时长、震动开关',
-    ],
-  ),
-];
-
-/// Renders one version block (header + bullet list) inside the changelog dialog.
-class _ChangelogEntry extends StatelessWidget {
-  const _ChangelogEntry({required this.entry});
-
-  final _ChangelogVersion entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'v${entry.version}',
-            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          for (final note in entry.notes)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text('• $note', style: textTheme.bodySmall),
-            ),
-        ],
       ),
     );
   }

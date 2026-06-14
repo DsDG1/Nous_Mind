@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
@@ -95,16 +96,29 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
   Future<void> _runAnalysis() async {
     final settings = context.read<SettingsViewModel>().settings;
     final apiKey = settings.aiApiKey;
-    if (apiKey == null) {
+    if (!settings.aiAssistantEnabled || apiKey == null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('请先在设置中填入 API 密钥')));
+        ..showSnackBar(const SnackBar(content: Text('请先在设置 → AI 助手 中启用并配置')));
+      return;
+    }
+    final aiAssist = context.read<AiAssistViewModel>();
+    if (aiAssist.isLockedDueToAuth) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('API 密钥连续失败,分析已锁定,请到设置更新密钥')),
+        );
+      return;
+    }
+    if (aiAssist.isThrottled) {
+      // The throttle banner is already visible; no need to also snack.
       return;
     }
     final text = _textController.text.trim();
     if (text.isEmpty && _imagePath == null) return;
     try {
-      await context.read<AiAssistViewModel>().analyze(
+      await aiAssist.analyze(
         apiKey: apiKey,
         timezone: _timezone,
         text: text.isEmpty ? null : text,
@@ -118,7 +132,7 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
         stackTrace: stackTrace,
       );
       if (!mounted) return;
-      context.read<AiAssistViewModel>().setError('分析过程发生错误,请重试');
+      aiAssist.setError('分析过程发生错误,请重试');
     }
   }
 
@@ -165,18 +179,25 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
 
   Widget _buildInputForm(BuildContext context, AiAssistViewModel vm) {
     final colors = Theme.of(context).colorScheme;
-    final hasApiKey = context.select<SettingsViewModel, bool>(
-      (s) => s.settings.aiApiKey != null,
+    final ready = context.select<SettingsViewModel, bool>(
+      (s) => s.settings.aiAssistantEnabled && s.settings.aiApiKey != null,
     );
     final hasInput =
         _textController.text.trim().isNotEmpty || _imagePath != null;
-    final canAnalyze = hasApiKey && hasInput && !vm.isLoading;
+    final canAnalyze =
+        ready &&
+        hasInput &&
+        !vm.isLoading &&
+        !vm.isLockedDueToAuth &&
+        !vm.isThrottled;
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        if (!hasApiKey)
-          _MissingKeyBanner(onOpenSettings: () => context.go('/settings/ai')),
+        if (vm.isLockedDueToAuth) const _AuthLockoutBanner(),
+        if (vm.isThrottled) _ThrottleBanner(viewModel: vm),
+        if (!ready)
+          const _MissingKeyBanner(message: '请先在 设置 → AI 助手 中启用并配置 AI 助手'),
         if (vm.status == AiAssistStatus.error && vm.errorMessage != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -491,9 +512,9 @@ class _CandidateRowState extends State<_CandidateRow> {
 }
 
 class _MissingKeyBanner extends StatelessWidget {
-  const _MissingKeyBanner({required this.onOpenSettings});
+  const _MissingKeyBanner({required this.message});
 
-  final VoidCallback onOpenSettings;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -509,13 +530,124 @@ class _MissingKeyBanner extends StatelessWidget {
         children: <Widget>[
           Icon(Icons.info_outline, color: colors.onPrimaryContainer),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(child: Text(message, style: const TextStyle(fontSize: 13))),
+          TextButton(
+            onPressed: () => GoRouter.of(context).go('/settings/ai'),
+            child: const Text('去设置'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Banner shown when consecutive auth failures have locked the analysis
+/// flow. The lock is only lifted by updating the API key in settings.
+class _AuthLockoutBanner extends StatelessWidget {
+  const _AuthLockoutBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.error, width: 1.5),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.lock_outline, color: colors.error),
+          const SizedBox(width: 8),
+          Expanded(
             child: Text(
-              '请先在 设置 → AI 助手 中填入 API 密钥',
-              style: TextStyle(fontSize: 13),
+              'API 密钥连续 ${AiAssistViewModel.authLockThreshold} 次失败,分析已锁定。请到 设置 → AI 助手 更新密钥。',
+              style: TextStyle(color: colors.onErrorContainer, fontSize: 13),
             ),
           ),
-          TextButton(onPressed: onOpenSettings, child: const Text('去设置')),
+          TextButton(
+            onPressed: () => GoRouter.of(context).go('/settings/ai'),
+            child: const Text('去设置'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Banner shown while the click throttle is active. Owns its own 1-second
+/// ticker so the countdown text re-renders without depending on the
+/// outer page's `setState`.
+class _ThrottleBanner extends StatefulWidget {
+  const _ThrottleBanner({required this.viewModel});
+
+  final AiAssistViewModel viewModel;
+
+  @override
+  State<_ThrottleBanner> createState() => _ThrottleBannerState();
+}
+
+class _ThrottleBannerState extends State<_ThrottleBanner> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ThrottleBanner old) {
+    super.didUpdateWidget(old);
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    final throttled = widget.viewModel.isThrottled;
+    if (throttled && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {});
+        if (!widget.viewModel.isThrottled) _syncTicker();
+      });
+    } else if (!throttled && _ticker != null) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = widget.viewModel;
+    if (!vm.isThrottled) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+    final remaining = vm.throttleRemainingSeconds;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: colors.errorContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.error, width: 1.5),
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.warning_amber_rounded, color: colors.error),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '严重警告:操作过于频繁,请稍候 ${remaining}s 再试',
+              style: TextStyle(color: colors.onErrorContainer, fontSize: 13),
+            ),
+          ),
         ],
       ),
     );

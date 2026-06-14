@@ -208,7 +208,10 @@ void main() {
         // concrete example with the dynamic tomorrow date, and the
         // device's current time rendered as wall-clock local time.
         expect(systemPrompt, contains('【时间规则】'));
-        expect(systemPrompt, contains('2026-06-14')); // tomorrow from fixedNowWithTime
+        expect(
+          systemPrompt,
+          contains('2026-06-14'),
+        ); // tomorrow from fixedNowWithTime
         expect(systemPrompt, contains('明天下午2点去上海'));
         expect(systemPrompt, contains('不是 UTC'));
         // The placeholder token must be fully substituted at runtime,

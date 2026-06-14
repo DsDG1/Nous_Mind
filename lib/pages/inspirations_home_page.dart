@@ -41,16 +41,16 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
           final items = _query.isEmpty
               ? viewModel.inspirations
               : viewModel.inspirations
-                  .where(
-                    (i) => i.text.toLowerCase().contains(_query.toLowerCase()),
-                  )
-                  .toList();
+                    .where(
+                      (i) =>
+                          i.text.toLowerCase().contains(_query.toLowerCase()),
+                    )
+                    .toList();
           if (items.isEmpty) {
             return EmptyState(
               icon: _query.isEmpty ? Icons.lightbulb_outline : Icons.search_off,
               title: _query.isEmpty ? '还没有灵感' : '没有匹配结果',
-              subtitle:
-                  _query.isEmpty ? '点击右下角 + 记录一条' : '换个关键词试试',
+              subtitle: _query.isEmpty ? '点击右下角 + 记录一条' : '换个关键词试试',
             );
           }
           return ListView.separated(
@@ -121,10 +121,7 @@ class _InspirationSearchDelegate extends SearchDelegate<String> {
   List<Widget>? buildActions(BuildContext context) {
     return [
       if (query.isNotEmpty)
-        IconButton(
-          icon: const Icon(Icons.clear),
-          onPressed: () => query = '',
-        ),
+        IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ''),
     ];
   }
 
@@ -144,9 +141,7 @@ class _InspirationSearchDelegate extends SearchDelegate<String> {
 
   Widget _buildList(BuildContext context) {
     final results = viewModel.inspirations
-        .where(
-          (i) => i.text.toLowerCase().contains(query.toLowerCase()),
-        )
+        .where((i) => i.text.toLowerCase().contains(query.toLowerCase()))
         .toList();
     if (results.isEmpty) {
       return const EmptyState(

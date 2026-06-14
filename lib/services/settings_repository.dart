@@ -32,10 +32,9 @@ class SettingsRepository {
 
   Future<void> save(AppSettings settings) async {
     final data = jsonEncode(settings.toJson());
-    await _database.db.insert(
-      'app_settings',
-      {'id': 1, 'data': data},
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await _database.db.insert('app_settings', {
+      'id': 1,
+      'data': data,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

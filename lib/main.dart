@@ -220,6 +220,7 @@ class _RemindersAppState extends State<RemindersApp>
         ChangeNotifierProvider<AiAssistViewModel>(
           create: (context) => AiAssistViewModel(
             widget.aiAnalyzer,
+            settings: context.read<SettingsViewModel>(),
             errorLog: context.read<ErrorLogService>(),
           ),
         ),
