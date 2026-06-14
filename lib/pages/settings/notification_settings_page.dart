@@ -68,6 +68,18 @@ class NotificationSettingsPage extends StatelessWidget {
                   ],
                 ),
                 SettingsSection(
+                  title: '贪睡',
+                  icon: Icons.snooze,
+                  children: <Widget>[
+                    SettingsTile(
+                      title: '贪睡时长',
+                      subtitle: settings.snoozeDuration.label,
+                      leading: const Icon(Icons.timer_outlined),
+                      onTap: () => _pickSnoozeDuration(context, vm, settings),
+                    ),
+                  ],
+                ),
+                SettingsSection(
                   title: '清理',
                   icon: Icons.cleaning_services_outlined,
                   children: <Widget>[
@@ -165,5 +177,39 @@ class NotificationSettingsPage extends StatelessWidget {
     await vm.setQuietHours(
       QuietHoursWindow(start: pickedStart, end: pickedEnd),
     );
+  }
+
+  Future<void> _pickSnoozeDuration(
+    BuildContext context,
+    SettingsViewModel vm,
+    AppSettings current,
+  ) async {
+    final selected = await showDialog<SnoozePreset>(
+      context: context,
+      builder: (ctx) {
+        return SimpleDialog(
+          title: const Text('选择贪睡时长'),
+          children: <Widget>[
+            RadioGroup<SnoozePreset>(
+              groupValue: current.snoozeDuration.preset,
+              onChanged: (value) => Navigator.of(ctx).pop(value),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (final preset in SnoozePreset.values)
+                    RadioListTile<SnoozePreset>(
+                      title: Text(SnoozeDuration(preset: preset).label),
+                      value: preset,
+                    ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (selected != null) {
+      await vm.setSnoozeDuration(SnoozeDuration(preset: selected));
+    }
   }
 }

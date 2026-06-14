@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/reminder.dart';
 import '../viewmodels/reminders_view_model.dart';
+import '../widgets/create_reminder_sheet.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/reminder_list_item.dart';
 
@@ -30,6 +31,17 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     await context.push('/editor', extra: (existing, fabPosition));
   }
 
+  Future<void> _openCreateChooser(BuildContext context) async {
+    final fabRenderBox =
+        _fabKey.currentContext?.findRenderObject() as RenderBox?;
+    final fabPosition = fabRenderBox != null
+        ? fabRenderBox.localToGlobal(
+            Offset(fabRenderBox.size.width / 2, fabRenderBox.size.height / 2),
+          )
+        : Offset.zero;
+    await CreateReminderSheet.show(context, fabPosition: fabPosition);
+  }
+
   Future<void> _deleteWithFeedback(
     BuildContext context,
     RemindersViewModel viewModel,
@@ -50,16 +62,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('提醒事项'),
-        actions: <Widget>[
-          IconButton(
-            tooltip: 'AI 助手',
-            icon: const Icon(Icons.auto_awesome_outlined),
-            onPressed: () => context.push('/assistant'),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('提醒事项')),
       body: Consumer<RemindersViewModel>(
         builder: (context, viewModel, _) {
           if (!viewModel.isLoaded) {
@@ -90,7 +93,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         key: _fabKey,
-        onPressed: () => _openEditor(context, null),
+        onPressed: () => _openCreateChooser(context),
         tooltip: '添加提醒',
         child: const Icon(Icons.add),
       ),

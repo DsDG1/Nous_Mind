@@ -1,7 +1,10 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/foundation.dart';
 
 import '../models/reminder_draft.dart';
 import '../services/ai_analyzer.dart';
+import '../services/error_log_service.dart';
 
 /// State machine for the AI assistant page.
 enum AiAssistStatus { idle, analyzing, success, error }
@@ -14,9 +17,12 @@ enum AiAssistStatus { idle, analyzing, success, error }
 /// view model never throws to the UI — every failure is reflected in
 /// `status` and `errorMessage`.
 class AiAssistViewModel extends ChangeNotifier {
-  AiAssistViewModel(this._analyzer);
+  AiAssistViewModel(this._analyzer, {ErrorLogService? errorLog})
+    // ignore: prefer_initializing_formals
+    : _errorLog = errorLog;
 
   final AiAnalyzer _analyzer;
+  final ErrorLogService? _errorLog;
 
   AiAssistStatus _status = AiAssistStatus.idle;
   List<ReminderDraft> _candidates = const <ReminderDraft>[];
@@ -57,11 +63,15 @@ class AiAssistViewModel extends ChangeNotifier {
       _candidates = drafts;
       _status = AiAssistStatus.success;
       _errorMessage = null;
-    } on AiAnalysisException catch (e) {
+    } on AiAnalysisException catch (e, st) {
+      developer.log('AI 分析失败', error: e, stackTrace: st);
+      _errorLog?.record(source: 'AiAssistViewModel', error: e, stackTrace: st);
       _candidates = const <ReminderDraft>[];
       _status = AiAssistStatus.error;
       _errorMessage = e.message;
-    } on Exception catch (e) {
+    } catch (e, st) {
+      developer.log('AI 分析失败', error: e, stackTrace: st);
+      _errorLog?.record(source: 'AiAssistViewModel', error: e, stackTrace: st);
       _candidates = const <ReminderDraft>[];
       _status = AiAssistStatus.error;
       _errorMessage = '分析失败:${e.toString()}';
@@ -98,6 +108,17 @@ class AiAssistViewModel extends ChangeNotifier {
     final index = _candidates.indexWhere((c) => c.id == id);
     if (index == -1) return;
     _candidates[index] = _candidates[index].copyWith(selected: value);
+    notifyListeners();
+  }
+
+  /// Sets the error state with [message] and notifies listeners.
+  /// Used by the UI layer when a previously-uncaught error escapes the
+  /// [analyze] method (e.g. a Dart [Error] that bypasses [Exception]
+  /// handlers deeper in the call stack).
+  void setError(String message) {
+    _status = AiAssistStatus.error;
+    _errorMessage = message;
+    _candidates = const <ReminderDraft>[];
     notifyListeners();
   }
 

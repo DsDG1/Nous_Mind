@@ -169,19 +169,23 @@ class DeepSeekAnalyzer implements AiAnalyzer {
     return parseAssistantJson(content);
   }
 
-  /// Runs on-device Chinese OCR on [imagePath] and returns the recognized
-  /// text. The image is pre-resized so the longest edge is at most
+  /// Runs on-device OCR on [imagePath] and returns the recognized
+  /// text. Uses Latin script which is universally available (Chinese
+  /// model requires Google Play Services downloadable module that may
+  /// not be present on all devices and causes a NoClassDefFoundError
+  /// native crash).
+  /// The image is pre-resized so the longest edge is at most
   /// [_maxImageEdgePx] to keep ML Kit's memory usage bounded on large
   /// screenshots.
   Future<String> _runOcr(String imagePath) async {
-    final TextRecognitionScript script = TextRecognitionScript.chinese;
-    final recognizer = TextRecognizer(script: script);
+    TextRecognizer? recognizer;
     try {
+      recognizer = TextRecognizer();
       final processedPath = await _shrinkImage(imagePath);
       final input = InputImage.fromFilePath(processedPath);
       final recognized = await recognizer.processImage(input);
       return recognized.text;
-    } on Exception catch (error, stackTrace) {
+    } catch (error, stackTrace) {
       developer.log(
         'OCR failed for $imagePath',
         error: error,
@@ -189,7 +193,7 @@ class DeepSeekAnalyzer implements AiAnalyzer {
       );
       throw AiOcrException('截图识别失败,请尝试更清晰的图片');
     } finally {
-      await recognizer.close();
+      await recognizer?.close();
     }
   }
 
@@ -201,31 +205,40 @@ class DeepSeekAnalyzer implements AiAnalyzer {
   Future<String> _shrinkImage(String sourcePath) async {
     final file = File(sourcePath);
     if (!await file.exists()) return sourcePath;
-    final bytes = await file.readAsBytes();
-    final image = img.decodeImage(bytes);
-    if (image == null) return sourcePath;
-    final w = image.width;
-    final h = image.height;
-    final longest = w > h ? w : h;
-    if (longest <= _maxImageEdgePx) {
+    try {
+      final bytes = await file.readAsBytes();
+      final image = img.decodeImage(bytes);
+      if (image == null) return sourcePath;
+      final w = image.width;
+      final h = image.height;
+      final longest = w > h ? w : h;
+      if (longest <= _maxImageEdgePx) {
+        image.clear();
+        return sourcePath;
+      }
+      final scale = _maxImageEdgePx / longest;
+      final resized = img.copyResize(
+        image,
+        width: (w * scale).round(),
+        height: (h * scale).round(),
+        interpolation: img.Interpolation.linear,
+      );
+      final resizedBytes = img.encodeJpg(resized, quality: 85);
       image.clear();
+      resized.clear();
+      final tmp = File(
+        '${Directory.systemTemp.path}/ai_ocr_${_generateId()}.jpg',
+      );
+      await tmp.writeAsBytes(resizedBytes, flush: true);
+      return tmp.path;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Image resize failed for $sourcePath, using original',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return sourcePath;
     }
-    final scale = _maxImageEdgePx / longest;
-    final resized = img.copyResize(
-      image,
-      width: (w * scale).round(),
-      height: (h * scale).round(),
-      interpolation: img.Interpolation.linear,
-    );
-    final resizedBytes = img.encodeJpg(resized, quality: 85);
-    image.clear();
-    resized.clear();
-    final tmp = File(
-      '${Directory.systemTemp.path}/ai_ocr_${_generateId()}.jpg',
-    );
-    await tmp.writeAsBytes(resizedBytes, flush: true);
-    return tmp.path;
   }
 
   static String _composeUserContent({

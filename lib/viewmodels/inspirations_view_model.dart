@@ -34,6 +34,11 @@ class InspirationsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Reloads the in-memory list from the database. Used by the data
+  /// management subpage after bulk imports or clears so the UI mirrors
+  /// the on-disk state without restarting the app.
+  Future<void> refresh() => _bootstrap();
+
   /// Inserts a new inspiration at the top of the list and persists it.
   ///
   /// [imagePath] is the absolute path returned by [InspirationImageStore.save];
@@ -86,5 +91,19 @@ class InspirationsViewModel extends ChangeNotifier {
       return _items.toList();
     }
     return _repository.search(query.trim());
+  }
+
+  /// Removes every inspiration and its associated image file. Used by
+  /// the data management subpage for bulk clear. Returns the number of
+  /// rows actually removed from the database.
+  Future<int> clearAll() async {
+    final all = List<Inspiration>.from(_items);
+    for (final inspiration in all) {
+      await _imageStore.deleteByPath(inspiration.imagePath);
+    }
+    final removed = await _repository.clearAll();
+    _items.clear();
+    notifyListeners();
+    return removed;
   }
 }

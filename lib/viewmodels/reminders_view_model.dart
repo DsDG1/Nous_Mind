@@ -73,6 +73,11 @@ class RemindersViewModel extends ChangeNotifier {
     await _purgeExpiredReminders();
   }
 
+  /// Reloads the in-memory list from the database. Used by the data
+  /// management subpage after bulk imports or clears so the UI mirrors
+  /// the on-disk state without restarting the app.
+  Future<void> refresh() => _bootstrap();
+
   Future<void> _rescheduleAll() async {
     final now = DateTime.now();
     for (final reminder in _reminders) {
@@ -225,6 +230,42 @@ class RemindersViewModel extends ChangeNotifier {
   /// Public hook so the app's lifecycle observer can trigger a purge on
   /// every foreground resume without exposing the private method.
   Future<void> onAppResumed() => _purgeExpiredReminders();
+
+  /// Removes every reminder, cancels its scheduled notification, and
+  /// deletes the associated image file (if any). Used by the data
+  /// management subpage for bulk clear. Returns the number of
+  /// reminders actually removed.
+  Future<int> clearAll() async {
+    final all = List<Reminder>.from(_reminders);
+    for (final reminder in all) {
+      try {
+        await _notifications.cancelReminder(reminder.id);
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to cancel notification during clearAll',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
+      final imagePath = reminder.imagePath;
+      if (imagePath != null) {
+        try {
+          await _imageStore.deleteByPath(imagePath);
+        } on Exception catch (error, stackTrace) {
+          developer.log(
+            'Failed to delete reminder image during clearAll',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+    final removed = await _repository.clearAll();
+    _reminders.clear();
+    notifyListeners();
+    _scheduleNearestTimer();
+    return removed;
+  }
 
   /// Bulk-add helper used by the AI assistant flow. All drafts land in
   /// the list, each OS notification is scheduled, then a single batch

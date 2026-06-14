@@ -103,13 +103,23 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
     }
     final text = _textController.text.trim();
     if (text.isEmpty && _imagePath == null) return;
-    await context.read<AiAssistViewModel>().analyze(
-      apiKey: apiKey,
-      timezone: _timezone,
-      text: text.isEmpty ? null : text,
-      imagePath: _imagePath,
-      now: DateTime.now(),
-    );
+    try {
+      await context.read<AiAssistViewModel>().analyze(
+        apiKey: apiKey,
+        timezone: _timezone,
+        text: text.isEmpty ? null : text,
+        imagePath: _imagePath,
+        now: DateTime.now(),
+      );
+    } catch (error, stackTrace) {
+      developer.log(
+        'AI analysis crashed in UI handler',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (!mounted) return;
+      context.read<AiAssistViewModel>().setError('分析过程发生错误,请重试');
+    }
   }
 
   Future<void> _saveSelected() async {
@@ -166,7 +176,7 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         if (!hasApiKey)
-          _MissingKeyBanner(onOpenSettings: () => context.push('/settings/ai')),
+          _MissingKeyBanner(onOpenSettings: () => context.go('/settings/ai')),
         if (vm.status == AiAssistStatus.error && vm.errorMessage != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -247,7 +257,7 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
           const Padding(
             padding: EdgeInsets.only(top: 12),
             child: Text(
-              '首次识别截图时会下载约 10MB 的中文 OCR 模型,请稍候。',
+              '正在识别截图中的文字…',
               style: TextStyle(fontSize: 12),
               textAlign: TextAlign.center,
             ),

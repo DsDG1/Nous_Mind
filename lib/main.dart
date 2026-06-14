@@ -1,4 +1,5 @@
 import 'dart:developer' as developer;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -8,7 +9,9 @@ import 'package:provider/provider.dart';
 import 'models/app_settings.dart';
 import 'router.dart';
 import 'services/ai_analyzer.dart';
+import 'services/backup_service.dart';
 import 'services/database.dart';
+import 'services/error_log_service.dart';
 import 'services/inspiration_image_store.dart';
 import 'services/inspiration_repository.dart';
 import 'services/notification_service.dart';
@@ -22,6 +25,27 @@ import 'widgets/reminder_popup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Capture uncaught framework and platform errors so the About page can
+  // surface them. These handlers run outside the widget tree, hence the
+  // global handle installed later in the Provider.
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    globalErrorLog?.record(
+      source: 'FlutterError',
+      error: details.exceptionAsString(),
+      stackTrace: details.stack,
+    );
+  };
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    globalErrorLog?.record(
+      source: 'PlatformDispatcher',
+      error: error,
+      stackTrace: stack,
+    );
+    return true;
+  };
+
   AppDatabase? database;
   try {
     database = await AppDatabase.open();
@@ -132,10 +156,11 @@ class _RemindersAppState extends State<RemindersApp>
         ),
         ChangeNotifierProvider<RemindersViewModel>(
           create: (context) {
+            final settings = context.read<SettingsViewModel>();
             final vm = RemindersViewModel(
               widget.reminderRepository,
               widget.notifications,
-              context.read<SettingsViewModel>(),
+              settings,
               widget.imageStore,
             );
             vm.onReminderDue = (reminder) {
@@ -146,8 +171,10 @@ class _RemindersAppState extends State<RemindersApp>
               showReminderPopup(
                 context: navigatorState.context,
                 title: reminder.title,
-                onSnooze: () =>
-                    vm.snoozeReminder(reminder.id, const Duration(minutes: 5)),
+                onSnooze: () => vm.snoozeReminder(
+                  reminder.id,
+                  settings.settings.snoozeDuration.duration,
+                ),
               );
             };
             return vm;
@@ -159,12 +186,26 @@ class _RemindersAppState extends State<RemindersApp>
             widget.imageStore,
           ),
         ),
+        ChangeNotifierProvider<ErrorLogService>(
+          create: (_) => attachGlobalErrorLog(ErrorLogService()),
+        ),
         ChangeNotifierProvider<AiAssistViewModel>(
-          create: (_) => AiAssistViewModel(widget.aiAnalyzer),
+          create: (context) => AiAssistViewModel(
+            widget.aiAnalyzer,
+            errorLog: context.read<ErrorLogService>(),
+          ),
         ),
         Provider<AiAnalyzer>.value(value: widget.aiAnalyzer),
         Provider<InspirationImageStore>.value(value: widget.imageStore),
         Provider<NotificationService>.value(value: widget.notifications),
+        Provider<BackupService>(
+          create: (_) => BackupService(
+            reminderRepository: widget.reminderRepository,
+            inspirationRepository: widget.inspirationRepository,
+            settingsRepository: widget.settingsRepository,
+            imageStore: widget.imageStore,
+          ),
+        ),
       ],
       child: Consumer<SettingsViewModel>(
         builder: (context, vm, _) {

@@ -62,7 +62,7 @@ class NotificationService {
       requestSoundPermission: false,
     );
     await _plugin.initialize(
-      const InitializationSettings(android: androidInit, iOS: darwinInit),
+      settings: const InitializationSettings(android: androidInit, iOS: darwinInit),
       onDidReceiveNotificationResponse: (response) {
         onTapNotification();
       },
@@ -128,14 +128,12 @@ class NotificationService {
     }
     final body = _composeBody(reminder.title);
     await _plugin.zonedSchedule(
-      _idFromReminderId(reminder.id),
-      reminder.title,
-      body,
-      tzTarget,
-      _details(vibrationEnabled: vibrationEnabled),
+      id: _idFromReminderId(reminder.id),
+      title: reminder.title,
+      body: body,
+      scheduledDate: tzTarget,
+      notificationDetails: _details(vibrationEnabled: vibrationEnabled),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
     );
   }
 
@@ -146,7 +144,7 @@ class NotificationService {
 
   /// Cancels the scheduled notification for [reminderId] (if any).
   Future<void> cancelReminder(String reminderId) async {
-    await _plugin.cancel(_idFromReminderId(reminderId));
+    await _plugin.cancel(id: _idFromReminderId(reminderId));
   }
 
   /// Fires a notification immediately. Used by the Settings → experience
@@ -158,10 +156,10 @@ class NotificationService {
     bool vibrationEnabled = true,
   }) async {
     await _plugin.show(
-      _immediateNotificationId,
-      title,
-      body,
-      _details(vibrationEnabled: vibrationEnabled),
+      id: _immediateNotificationId,
+      title: title,
+      body: body,
+      notificationDetails: _details(vibrationEnabled: vibrationEnabled),
     );
   }
 

@@ -52,6 +52,12 @@ class ReminderRepository {
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
+  /// Removes every row from the reminders table. Used by the data
+  /// management subpage to bulk-clear entries.
+  Future<int> clearAll() async {
+    return _database.db.delete('reminders');
+  }
+
   static Map<String, dynamic> _toRow(Reminder r) => {
     'id': r.id,
     'title': r.title,

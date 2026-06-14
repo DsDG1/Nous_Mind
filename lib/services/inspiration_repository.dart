@@ -1,3 +1,5 @@
+import 'package:sqflite/sqflite.dart';
+
 import '../models/inspiration.dart';
 import 'database.dart';
 
@@ -39,6 +41,20 @@ class InspirationRepository {
       orderBy: 'created_at DESC',
     );
     return rows.map(_fromRow).toList();
+  }
+
+  Future<int> count() async {
+    final result = await _database.db.rawQuery(
+      'SELECT COUNT(*) AS cnt FROM inspirations',
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  /// Removes every row from the inspirations table. Used by the data
+  /// management subpage to bulk-clear entries. Callers are responsible
+  /// for deleting any associated image files.
+  Future<int> clearAll() async {
+    return _database.db.delete('inspirations');
   }
 
   static Map<String, dynamic> _toRow(Inspiration i) => {

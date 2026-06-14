@@ -11,7 +11,9 @@ import 'pages/reminder_editor_page.dart';
 import 'pages/reminders_home_page.dart';
 import 'pages/settings/ai_settings_page.dart';
 import 'pages/settings/appearance_settings_page.dart';
+import 'pages/settings/data_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
+import 'pages/settings/about_settings_page.dart';
 import 'pages/settings_page.dart';
 import 'widgets/circular_reveal_clip.dart';
 
@@ -69,16 +71,21 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'assistant',
                   parentNavigatorKey: rootNavigatorKey,
-                  pageBuilder: (context, state) => CustomTransitionPage(
-                    key: state.pageKey,
-                    child: const AiAssistantPage(),
-                    transitionsBuilder: (_, animation, _, child) =>
-                        CircularRevealTransition(
-                          animation: animation,
-                          center: const Offset(0.5, 0.5),
-                          child: child,
-                        ),
-                  ),
+                  pageBuilder: (context, state) {
+                    final center = state.extra is Offset
+                        ? state.extra as Offset
+                        : const Offset(0.5, 0.5);
+                    return CustomTransitionPage(
+                      key: state.pageKey,
+                      child: const AiAssistantPage(),
+                      transitionsBuilder: (_, animation, _, child) =>
+                          CircularRevealTransition(
+                            animation: animation,
+                            center: center,
+                            child: child,
+                          ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -118,8 +125,16 @@ final GoRouter router = GoRouter(
                   builder: (context, state) => const NotificationSettingsPage(),
                 ),
                 GoRoute(
+                  path: 'data',
+                  builder: (context, state) => const DataSettingsPage(),
+                ),
+                GoRoute(
                   path: 'ai',
                   builder: (context, state) => const AiSettingsPage(),
+                ),
+                GoRoute(
+                  path: 'about',
+                  builder: (context, state) => const AboutSettingsPage(),
                 ),
               ],
             ),

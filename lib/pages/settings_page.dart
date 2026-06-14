@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/app_settings.dart';
+import '../services/backup_service.dart';
 import '../viewmodels/settings_view_model.dart';
 import '../widgets/settings_section.dart';
+import '../widgets/settings_stats_card.dart';
 
 /// Home of the settings tab. Renders a grouped list with one tile per
 /// settings subpage plus a high-level summary that mirrors the current
@@ -22,6 +24,9 @@ class SettingsPage extends StatelessWidget {
             final settings = vm.settings;
             return ListView(
               children: <Widget>[
+                SettingsStatsCard(
+                  future: context.read<BackupService>().getStats(),
+                ),
                 SettingsSection(
                   title: '偏好',
                   icon: Icons.tune,
@@ -41,10 +46,22 @@ class SettingsPage extends StatelessWidget {
                       onTap: () => context.push('/settings/notification'),
                     ),
                     SettingsTile(
+                      title: '数据',
+                      subtitle: '备份、恢复与清理',
+                      leading: const Icon(Icons.storage_outlined),
+                      onTap: () => context.push('/settings/data'),
+                    ),
+                    SettingsTile(
                       title: 'AI 助手',
                       subtitle: settings.aiApiKey == null ? '未配置' : '已配置',
                       leading: const Icon(Icons.auto_awesome_outlined),
                       onTap: () => context.push('/settings/ai'),
+                    ),
+                    SettingsTile(
+                      title: '关于',
+                      subtitle: 'Nous 记事',
+                      leading: const Icon(Icons.info_outline),
+                      onTap: () => context.push('/settings/about'),
                     ),
                   ],
                 ),
@@ -69,7 +86,8 @@ class SettingsPage extends StatelessWidget {
     if (settings.quietHoursEnabled) {
       parts.add('免打扰');
     }
-    return parts.isEmpty ? '默认设置' : parts.join(' · ');
+    parts.add('贪睡 ${settings.snoozeDuration.duration.inMinutes} 分钟');
+    return parts.join(' · ');
   }
 }
 
