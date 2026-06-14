@@ -196,6 +196,19 @@ class _ChangelogVersion {
 /// screen for the latest version.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.2.1',
+    notes: <String>[
+      '修复快速添加提醒磁贴在某些设备上无法打开应用的问题',
+    ],
+  ),
+  _ChangelogVersion(
+    version: '1.2.0',
+    notes: <String>[
+      '新增快速添加提醒磁贴,可在通知栏快速创建提醒',
+      '新增 DeepSeek 教程链接和 AI 风险提示',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.1.1',
     notes: <String>[
       '优化设置页性能,切换设置不再卡顿',
