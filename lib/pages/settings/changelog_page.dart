@@ -254,6 +254,15 @@ class _ChangelogVersion {
 /// shipping a new version; the rest of the page renders from here.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.3.0',
+    notes: <String>[
+      '删除提醒改为「软删除」,可从回收站恢复 30 天',
+      '新增回收站页,可全部恢复或永久删除,过期自动清理',
+      '设置 → 数据 中新增回收站入口',
+      '备份导出不再包含已删除的提醒',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.2.6',
     notes: <String>[
       '提醒新增描述字段,通知内容更详细',

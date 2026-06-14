@@ -154,6 +154,40 @@ void main() {
       );
     });
 
+    test('excludes trashed reminders from the export', () async {
+      await reminders.insert(
+        Reminder(
+          id: 'r-active',
+          title: 'Active reminder',
+          reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
+        ),
+      );
+      await reminders.insert(
+        Reminder(
+          id: 'r-trashed',
+          title: 'Trashed reminder',
+          reminderTime: DateTime.utc(2026, 6, 13, 10, 0),
+        ),
+      );
+      // Move one row to the trash; the export must drop it.
+      await reminders.softDelete('r-trashed', DateTime.utc(2026, 6, 14, 9, 0));
+
+      final file = await backup.exportToFile();
+      final content = await file.readAsString();
+      final decoded = jsonDecode(content) as Map<String, dynamic>;
+      final exported = (decoded['reminders'] as List<dynamic>)
+          .cast<Map<String, dynamic>>()
+          .map(Reminder.fromJson)
+          .toList();
+
+      expect(exported.map((r) => r.id), <String>['r-active']);
+      expect(
+        exported.any((r) => r.isDeleted),
+        isFalse,
+        reason: 'BackupService.exportToFile must not include trashed rows',
+      );
+    });
+
     test('rejects malformed backup files with FormatException', () async {
       final file = File('${tempDir.path}/bad.json')
         ..writeAsStringSync('"just a string"');

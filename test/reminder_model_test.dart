@@ -144,5 +144,110 @@ void main() {
 
       expect(cleared.description, isNull);
     });
+
+    test('isDeleted/deletedAt round-trip through JSON', () {
+      final deletedAt = DateTime(2026, 6, 14, 12, 0);
+      final original = Reminder(
+        id: '1700000000000000',
+        title: '买菜',
+        reminderTime: fixedTime,
+        isDeleted: true,
+        deletedAt: deletedAt,
+        createdAt: fixedTime,
+      );
+
+      final restored = Reminder.fromJson(original.toJson());
+
+      expect(restored.isDeleted, isTrue);
+      expect(restored.deletedAt, deletedAt);
+    });
+
+    test('isDeleted/deletedAt round-trip through Map (SQLite)', () {
+      final deletedAt = DateTime(2026, 6, 14, 12, 0);
+      final original = Reminder(
+        id: '1700000000000000',
+        title: '买菜',
+        reminderTime: fixedTime,
+        isDeleted: true,
+        deletedAt: deletedAt,
+        createdAt: fixedTime,
+      );
+
+      final restored = Reminder.fromMap(original.toMap());
+
+      expect(restored.isDeleted, isTrue);
+      expect(restored.deletedAt, deletedAt);
+      // SQLite stores booleans as 0/1; the mapper must round-trip
+      // the integer back into a proper `bool` so downstream code
+      // can use it as a condition without surprises.
+      expect(restored.toMap()['is_deleted'], 1);
+    });
+
+    test('isDeleted defaults to false when key missing from JSON', () {
+      final json = <String, dynamic>{
+        'id': '1700000000000000',
+        'title': '买菜',
+        'reminder_time': fixedTime.toIso8601String(),
+        'created_at': fixedTime.toIso8601String(),
+      };
+
+      final restored = Reminder.fromJson(json);
+
+      expect(restored.isDeleted, isFalse);
+      expect(restored.deletedAt, isNull);
+    });
+
+    test('isDeleted defaults to false when column missing from Map', () {
+      // Pre-v4 rows in SQLite do not have is_deleted / deleted_at.
+      final map = <String, dynamic>{
+        'id': '1700000000000000',
+        'title': '买菜',
+        'reminder_time': fixedTime.toIso8601String(),
+        'image_path': null,
+        'description': null,
+        'created_at': fixedTime.toIso8601String(),
+      };
+
+      final restored = Reminder.fromMap(map);
+
+      expect(restored.isDeleted, isFalse);
+      expect(restored.deletedAt, isNull);
+    });
+
+    test('copyWith can mark as trashed with deletedAt', () {
+      final original = Reminder(
+        id: '1',
+        title: '买菜',
+        reminderTime: fixedTime,
+        createdAt: fixedTime,
+      );
+
+      final stamped = original.copyWith(
+        isDeleted: true,
+        deletedAt: DateTime(2026, 6, 14, 12, 0),
+      );
+
+      expect(stamped.isDeleted, isTrue);
+      expect(stamped.deletedAt, DateTime(2026, 6, 14, 12, 0));
+    });
+
+    test('copyWith clearDeletedAt wipes the timestamp', () {
+      final original = Reminder(
+        id: '1',
+        title: '买菜',
+        reminderTime: fixedTime,
+        isDeleted: true,
+        deletedAt: DateTime(2026, 6, 14, 12, 0),
+        createdAt: fixedTime,
+      );
+
+      final restored = original.copyWith(
+        isDeleted: false,
+        clearDeletedAt: true,
+      );
+
+      expect(restored.isDeleted, isFalse);
+      expect(restored.deletedAt, isNull);
+    });
   });
 }
