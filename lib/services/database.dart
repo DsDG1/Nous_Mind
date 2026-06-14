@@ -15,7 +15,7 @@ class AppDatabase {
 
   final Database _db;
 
-  static const int _version = 2;
+  static const int _version = 3;
   static const String _name = 'reminders.db';
 
   Database get db => _db;
@@ -41,6 +41,7 @@ class AppDatabase {
         title TEXT NOT NULL,
         reminder_time TEXT NOT NULL,
         image_path TEXT,
+        description TEXT,
         created_at TEXT NOT NULL
       )
     ''');
@@ -72,6 +73,13 @@ class AppDatabase {
       await db.execute('DROP TRIGGER IF EXISTS inspirations_ai');
       await db.execute('DROP TRIGGER IF EXISTS inspirations_ad');
       await db.execute('DROP TRIGGER IF EXISTS inspirations_au');
+    }
+    if (oldVersion < 3) {
+      // v3 adds the optional multi-line body to reminders. ALTER TABLE
+      // is additive and preserves every existing row; SQLite stores the
+      // column as NULL for rows written before the migration, which
+      // [Reminder.fromMap] already treats as "no description".
+      await db.execute('ALTER TABLE reminders ADD COLUMN description TEXT');
     }
   }
 

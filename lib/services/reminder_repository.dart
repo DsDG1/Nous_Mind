@@ -66,6 +66,7 @@ class ReminderRepository {
     'title': r.title,
     'reminder_time': r.reminderTime.toIso8601String(),
     'image_path': r.imagePath,
+    'description': r.description,
     'created_at': r.createdAt.toIso8601String(),
   };
 

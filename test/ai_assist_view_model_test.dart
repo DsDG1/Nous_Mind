@@ -25,6 +25,7 @@ class _ScriptedAnalyzer implements AiAnalyzer {
   final List<Object> _responses;
   int _index = 0;
   int callCount = 0;
+  int polishCallCount = 0;
 
   @override
   Future<List<ReminderDraft>> analyze({
@@ -42,6 +43,15 @@ class _ScriptedAnalyzer implements AiAnalyzer {
     if (response is List<ReminderDraft>) return response;
     if (response is Exception) throw response;
     throw StateError('Unsupported scripted response: $response');
+  }
+
+  @override
+  Future<String> polishText({
+    required String text,
+    required String apiKey,
+  }) async {
+    polishCallCount++;
+    return text;
   }
 
   @override

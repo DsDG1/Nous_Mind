@@ -11,6 +11,7 @@ class ReminderDraft {
     required this.title,
     required this.suggestedTime,
     this.reason,
+    this.description,
     this.selected = true,
   });
 
@@ -28,6 +29,12 @@ class ReminderDraft {
   /// the review row.
   String? reason;
 
+  /// Optional multi-line body. Mirrors [Reminder.description] so drafts
+  /// parsed by the AI assistant can carry a body the same way manual
+  /// reminders do. Populated when the AI response includes a
+  /// `description` field for the reminder; otherwise `null`.
+  String? description;
+
   /// Whether this draft should be saved when the user taps the bulk
   /// "添加" button. Defaults to `true`.
   bool selected;
@@ -36,6 +43,7 @@ class ReminderDraft {
     String? title,
     DateTime? suggestedTime,
     String? reason,
+    String? description,
     bool? selected,
   }) {
     return ReminderDraft(
@@ -43,6 +51,7 @@ class ReminderDraft {
       title: title ?? this.title,
       suggestedTime: suggestedTime ?? this.suggestedTime,
       reason: reason ?? this.reason,
+      description: description ?? this.description,
       selected: selected ?? this.selected,
     );
   }

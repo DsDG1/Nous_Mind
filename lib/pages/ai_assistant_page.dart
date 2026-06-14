@@ -145,7 +145,13 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
     final navigator = GoRouter.of(context);
     await reminders.addMultiple(
       selected
-          .map((c) => (title: c.title, reminderTime: c.suggestedTime))
+          .map(
+            (c) => (
+              title: c.title,
+              reminderTime: c.suggestedTime,
+              description: c.description,
+            ),
+          )
           .toList(),
     );
     messenger

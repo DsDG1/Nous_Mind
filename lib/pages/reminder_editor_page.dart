@@ -7,8 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/reminder.dart';
+import '../services/ai_analyzer.dart';
 import '../services/inspiration_image_store.dart';
 import '../viewmodels/reminders_view_model.dart';
+import '../viewmodels/settings_view_model.dart';
+import '../widgets/ai_polish_sheet.dart';
 import '../widgets/image_preview.dart';
 
 /// Page used for both creating a new reminder and editing an existing one.
@@ -30,15 +33,20 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   final _formKey = GlobalKey<FormState>();
   final ImagePicker _picker = ImagePicker();
   late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
   late DateTime _reminderTime;
 
   String? _imagePath;
   bool _picking = false;
+  bool _isPolishing = false;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.initial?.title ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.initial?.description ?? '',
+    );
     _reminderTime = widget.initial?.reminderTime ?? _defaultTime();
     _imagePath = widget.initial?.imagePath;
   }
@@ -46,6 +54,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -85,6 +94,70 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     setState(() => _imagePath = null);
   }
 
+  /// Invokes the AI analyzer's [AiAnalyzer.polishText] on the current
+  /// description, then shows a side-by-side preview so the user can
+  /// accept or reject the revision before it overwrites the field.
+  /// Failures are mapped through the same [AiAnalysisException]
+  /// hierarchy used by the AI assistant page, so the SnackBar copy
+  /// stays consistent.
+  Future<void> _onPolishPressed() async {
+    if (_isPolishing) return;
+    final settings = context.read<SettingsViewModel>().settings;
+    if (!settings.aiAssistantEnabled) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('请先在 设置 → AI 助手 中启用 AI 助手')),
+        );
+      return;
+    }
+    final apiKey = settings.aiApiKey;
+    if (apiKey == null || apiKey.trim().isEmpty) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('请先在 设置 → AI 助手 中填写 API 密钥')),
+        );
+      return;
+    }
+    final original = _descriptionController.text;
+    if (original.trim().isEmpty) return;
+
+    final analyzer = context.read<AiAnalyzer>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isPolishing = true);
+    try {
+      final polished = await analyzer.polishText(
+        text: original,
+        apiKey: apiKey,
+      );
+      if (!mounted) return;
+      final accepted = await AiPolishSheet.show(
+        context,
+        original: original,
+        polished: polished,
+      );
+      if (accepted && mounted) {
+        setState(() {
+          _descriptionController.text = polished;
+        });
+      }
+    } on AiAnalysisException catch (error) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(error.message)));
+    } on Exception catch (error, stackTrace) {
+      developer.log('AI polish failed', error: error, stackTrace: stackTrace);
+      if (!mounted) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('润色失败,请稍后重试')));
+    } finally {
+      if (mounted) setState(() => _isPolishing = false);
+    }
+  }
+
   Future<void> _pickDateTime() async {
     final pickedDate = await showDatePicker(
       context: context,
@@ -115,6 +188,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     final viewModel = context.read<RemindersViewModel>();
     final store = context.read<InspirationImageStore>();
     final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
     final time = _reminderTime;
     final existing = widget.initial;
 
@@ -136,6 +210,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         title: title,
         reminderTime: time,
         imagePath: newImagePath,
+        description: description.isEmpty ? null : description,
       );
     } else {
       await viewModel.update(
@@ -143,6 +218,8 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
           title: title,
           reminderTime: time,
           imagePath: newImagePath,
+          description: description.isEmpty ? null : description,
+          clearDescription: description.isEmpty,
         ),
       );
       if (previousImagePath != null && previousImagePath != newImagePath) {
@@ -212,6 +289,47 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
                     return '请输入提醒标题';
                   }
                   return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              Consumer<SettingsViewModel>(
+                builder: (context, settingsVm, _) {
+                  final settings = settingsVm.settings;
+                  final canPolish =
+                      settings.aiAssistantEnabled &&
+                      (settings.aiApiKey?.trim().isNotEmpty ?? false);
+                  return TextFormField(
+                    controller: _descriptionController,
+                    decoration: InputDecoration(
+                      labelText: '描述(可选)',
+                      hintText: '详情、清单、备注……会显示在通知中',
+                      border: const OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                      suffixIcon: canPolish
+                          ? _isPolishing
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.auto_fix_high),
+                                    tooltip: 'AI 一键润色',
+                                    onPressed: _onPolishPressed,
+                                  )
+                          : null,
+                    ),
+                    minLines: 3,
+                    maxLines: 8,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    maxLength: 1000,
+                  );
                 },
               ),
               const SizedBox(height: 24),

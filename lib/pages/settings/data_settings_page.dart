@@ -54,9 +54,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       if (!mounted) return;
       await SharePlus.instance.share(
         ShareParams(
-          files: <XFile>[
-            XFile(file.path, mimeType: 'application/json'),
-          ],
+          files: <XFile>[XFile(file.path, mimeType: 'application/json')],
           text: 'Nous 记事 备份',
         ),
       );

@@ -92,12 +92,14 @@ class RemindersViewModel extends ChangeNotifier {
     required String title,
     required DateTime reminderTime,
     String? imagePath,
+    String? description,
   }) async {
     final reminder = Reminder(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       title: title,
       reminderTime: reminderTime,
       imagePath: imagePath,
+      description: description,
     );
     _reminders.add(reminder);
     await _repository.insert(reminder);
@@ -144,7 +146,10 @@ class RemindersViewModel extends ChangeNotifier {
   /// are stored regardless of whether the notification was scheduled.
   ///
   /// The current user preferences are read at schedule time, so toggling
-  /// settings before adding a reminder is honoured immediately.
+  /// settings before adding a reminder is honoured immediately. The snooze
+  /// action label is templated against the user's current
+  /// [SnoozeDuration] so the in-shade button always matches the actual
+  /// snooze the app will apply.
   Future<void> _safeSchedule(Reminder reminder) async {
     final prefs = _settings.settings;
     try {
@@ -152,6 +157,7 @@ class RemindersViewModel extends ChangeNotifier {
         reminder,
         vibrationEnabled: prefs.vibrationEnabled,
         quietHours: prefs.quietHoursEnabled ? prefs.quietHours : null,
+        snoozeActionLabel: '稍后提醒（${prefs.snoozeDuration.label}）',
       );
     } on Exception catch (error, stackTrace) {
       developer.log(
@@ -273,7 +279,7 @@ class RemindersViewModel extends ChangeNotifier {
   ///
   /// Returns the number of reminders actually added.
   Future<int> addMultiple(
-    List<({String title, DateTime reminderTime})> drafts,
+    List<({String title, DateTime reminderTime, String? description})> drafts,
   ) async {
     if (drafts.isEmpty) return 0;
     final baseId = DateTime.now().microsecondsSinceEpoch;
@@ -284,6 +290,7 @@ class RemindersViewModel extends ChangeNotifier {
         id: '$baseId-$i',
         title: draft.title,
         reminderTime: draft.reminderTime,
+        description: draft.description,
       );
       _reminders.add(reminder);
       newcomers.add(reminder);

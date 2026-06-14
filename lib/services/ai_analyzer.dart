@@ -26,6 +26,14 @@ abstract class AiAnalyzer {
     required DateTime now,
   });
 
+  /// Rewrites [text] into a more readable, well-structured form while
+  /// preserving the original meaning. Used by the reminder editor's
+  /// "AI 一键润色" affordance. Implementations may be lossy on edge
+  /// cases (e.g. server outage); the editor surfaces failures through
+  /// the same [AiAnalysisException] hierarchy as [analyze] so the UX
+  /// stays consistent.
+  Future<String> polishText({required String text, required String apiKey});
+
   /// Releases any owned resources (HTTP clients, native recognizers).
   void dispose() {}
 
@@ -88,6 +96,14 @@ class DeepSeekAnalyzer implements AiAnalyzer {
   static const String _model = 'deepseek-v4-flash';
   static const Duration _timeout = Duration(seconds: 30);
   static const int _maxImageEdgePx = 2048;
+  static const String _polishSystemPrompt = '''
+你是中文写作润色助手。直接对用户文本做以下优化:
+1. 修正错别字、标点、口语化表达,使之更可读
+2. 在保留原意的前提下,适当重组句式或使用列表/分段,提升条理
+3. 可以轻微润色措辞,但不改变事实、不添加信息、不替用户决策
+
+严禁输出引号、说明、提示语、Markdown 围栏。只返回润色后的纯文本。
+''';
 
   /// Wires the analyzer to read the user's
   /// [AppSettings.chineseOcrEnabled] preference on every [analyze]
@@ -202,6 +218,88 @@ class DeepSeekAnalyzer implements AiAnalyzer {
     }
 
     return parseAssistantJson(content);
+  }
+
+  /// Polish a free-form Chinese text. The result is returned verbatim
+  /// (the model is asked to return plain text without Markdown fences or
+  /// explanations), trimmed of leading/trailing whitespace. Errors
+  /// mirror the [analyze] flow so the editor can render SnackBar
+  /// messages with the same `AiAnalysisException` mapping.
+  @override
+  Future<String> polishText({
+    required String text,
+    required String apiKey,
+  }) async {
+    final trimmedKey = apiKey.trim();
+    if (trimmedKey.isEmpty) {
+      throw AiAuthException('API 密钥无效,请到 设置 → AI 助手 检查');
+    }
+    if (text.trim().isEmpty) {
+      throw AiParseException('描述为空,无需润色');
+    }
+
+    final body = <String, dynamic>{
+      'model': _model,
+      'messages': <Map<String, String>>[
+        <String, String>{'role': 'system', 'content': _polishSystemPrompt},
+        <String, String>{'role': 'user', 'content': text},
+      ],
+      // Plain text response — explicitly NOT json_object, otherwise the
+      // model will wrap the answer in `{"reply": "..."}`.
+      'temperature': 0.7,
+      'max_tokens': 1024,
+    };
+
+    final http.Response response;
+    try {
+      response = await _client
+          .post(
+            Uri.parse(_endpoint),
+            headers: <String, String>{
+              'Authorization': 'Bearer $trimmedKey',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(_timeout);
+    } on TimeoutException {
+      throw AiNetworkException('请求超时,请检查网络后重试');
+    } on SocketException {
+      throw AiNetworkException('网络异常,请检查连接后重试');
+    } on http.ClientException {
+      throw AiNetworkException('网络异常,请检查连接后重试');
+    }
+
+    final status = response.statusCode;
+    if (status == 401 || status == 403) {
+      throw AiAuthException('API 密钥无效,请到 设置 → AI 助手 检查');
+    }
+    if (status == 429) {
+      throw AiRateLimitException('请求过于频繁,请稍后再试');
+    }
+    if (status >= 500) {
+      throw AiServerException('AI 服务暂时不可用 ($status)');
+    }
+    if (status != 200) {
+      throw AiServerException('AI 服务返回异常 ($status)');
+    }
+
+    try {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final choices = decoded['choices'] as List<dynamic>?;
+      if (choices == null || choices.isEmpty) {
+        throw const FormatException('Missing choices');
+      }
+      final first = choices.first as Map<String, dynamic>;
+      final message = first['message'] as Map<String, dynamic>?;
+      final raw = message?['content'];
+      if (raw is! String) {
+        throw const FormatException('Missing content');
+      }
+      return _stripCodeFences(raw).trim();
+    } on FormatException {
+      throw AiParseException('AI 返回格式无法解析');
+    }
   }
 
   /// Runs on-device OCR on [imagePath] and returns the recognized

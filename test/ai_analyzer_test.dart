@@ -367,4 +367,149 @@ void main() {
       );
     });
   });
+
+  group('DeepSeekAnalyzer.polishText', () {
+    Map<String, dynamic> chatResponse(String content) => <String, dynamic>{
+      'choices': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'message': <String, dynamic>{'content': content},
+        },
+      ],
+    };
+
+    test('returns the trimmed model content on 200', () async {
+      final client = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(
+          request.url.toString(),
+          'https://api.deepseek.com/v1/chat/completions',
+        );
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        expect(body['model'], 'deepseek-v4-flash');
+        // Plain text — the analyzer must NOT request JSON mode here, or
+        // the model would wrap the answer in `{"reply": "..."}`.
+        expect(body.containsKey('response_format'), isFalse);
+        expect(body['temperature'], 0.7);
+        final messages = body['messages'] as List<dynamic>;
+        expect(messages, hasLength(2));
+        expect((messages.first as Map<String, dynamic>)['role'], 'system');
+        expect(
+          ((messages.first as Map<String, dynamic>)['content'] as String),
+          contains('润色'),
+        );
+        return http.Response(
+          jsonEncode(chatResponse('  润色后的文本。  ')),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+
+      final result = await analyzer.polishText(
+        text: '原文\n带换行',
+        apiKey: 'test-key',
+      );
+      expect(result, '润色后的文本。');
+    });
+
+    test('strips Markdown code fences defensively', () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          jsonEncode(chatResponse('```\n润色后\n```')),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        ),
+      );
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+
+      final result = await analyzer.polishText(text: '原文', apiKey: 'test-key');
+      expect(result, '润色后');
+    });
+
+    test('rejects empty input with AiParseException', () async {
+      final client = MockClient((_) async => http.Response('', 200));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: '   \n  ', apiKey: 'test-key'),
+        throwsA(isA<AiParseException>()),
+      );
+    });
+
+    test('rejects whitespace-only key with AiAuthException', () async {
+      final client = MockClient((_) async => http.Response('', 200));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: '   '),
+        throwsA(isA<AiAuthException>()),
+      );
+    });
+
+    test('maps 401 to AiAuthException', () async {
+      final client = MockClient((_) async => http.Response('{"err":1}', 401));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'bad'),
+        throwsA(isA<AiAuthException>()),
+      );
+    });
+
+    test('maps 429 to AiRateLimitException', () async {
+      final client = MockClient((_) async => http.Response('rate', 429));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
+        throwsA(isA<AiRateLimitException>()),
+      );
+    });
+
+    test('maps 500 to AiServerException', () async {
+      final client = MockClient((_) async => http.Response('boom', 500));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
+        throwsA(isA<AiServerException>()),
+      );
+    });
+
+    test('maps malformed body to AiParseException', () async {
+      final client = MockClient((_) async => http.Response('not json', 200));
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
+        throwsA(isA<AiParseException>()),
+      );
+    });
+
+    test('maps SocketException to AiNetworkException', () async {
+      final client = MockClient((_) async {
+        throw const SocketException('no route to host');
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
+        throwsA(isA<AiNetworkException>()),
+      );
+    });
+
+    test('maps TimeoutException to AiNetworkException', () async {
+      final client = MockClient((_) async {
+        throw TimeoutException('slow');
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      expect(
+        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
+        throwsA(isA<AiNetworkException>()),
+      );
+    });
+  });
 }
