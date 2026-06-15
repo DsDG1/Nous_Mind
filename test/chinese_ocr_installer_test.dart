@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_application_1/services/chinese_ocr_installer.dart';
+import 'package:nousmind/services/chinese_ocr_installer.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

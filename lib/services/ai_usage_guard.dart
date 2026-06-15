@@ -1,6 +1,6 @@
 import 'package:clock/clock.dart';
 
-import '../viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
 
 /// Outcome of an [AiUsageGuard.tryAcquire] check.
 ///
@@ -57,11 +57,7 @@ final class AcquireDailyLimitReached extends AcquireResult {
 /// so re-enabling the switch mid-day restores the ceiling as if it
 /// had never been off.
 class AiUsageGuard {
-  AiUsageGuard({
-    required SettingsViewModel settings,
-    Duration cooldown = _defaultCooldown,
-  })  : _settings = settings,
-        _cooldown = cooldown;
+  AiUsageGuard({required this._settings, this._cooldown = _defaultCooldown});
 
   static const Duration _defaultCooldown = Duration(seconds: 10);
 

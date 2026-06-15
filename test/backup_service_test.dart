@@ -7,14 +7,14 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:flutter_application_1/models/inspiration.dart';
-import 'package:flutter_application_1/models/reminder.dart';
-import 'package:flutter_application_1/services/backup_service.dart';
-import 'package:flutter_application_1/services/inspiration_image_store.dart';
-import 'package:flutter_application_1/services/inspiration_repository.dart';
-import 'package:flutter_application_1/services/reminder_repository.dart';
-import 'package:flutter_application_1/services/settings_repository.dart';
-import 'package:flutter_application_1/services/database.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/backup_service.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/inspiration_repository.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/services/settings_repository.dart';
+import 'package:nousmind/services/database.dart';
 
 void main() {
   setUpAll(() {

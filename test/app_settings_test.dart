@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_application_1/models/app_settings.dart';
+import 'package:nousmind/models/app_settings.dart';
 
 void main() {
   group('AppSettings migration policy', () {

@@ -6,13 +6,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:flutter_application_1/models/app_settings.dart';
-import 'package:flutter_application_1/models/inspiration.dart';
-import 'package:flutter_application_1/models/reminder.dart';
-import 'package:flutter_application_1/services/database.dart';
-import 'package:flutter_application_1/services/inspiration_repository.dart';
-import 'package:flutter_application_1/services/reminder_repository.dart';
-import 'package:flutter_application_1/services/settings_repository.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/database.dart';
+import 'package:nousmind/services/inspiration_repository.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/services/settings_repository.dart';
 
 void main() {
   // Use the FFI-backed SQLite implementation for consistent behavior across

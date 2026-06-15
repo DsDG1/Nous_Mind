@@ -8,24 +8,24 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:nested/nested.dart';
 import 'package:provider/provider.dart';
 
-import 'models/app_settings.dart';
-import 'router.dart';
-import 'services/ai_analyzer.dart';
-import 'services/ai_usage_guard.dart';
-import 'services/backup_service.dart';
-import 'services/chinese_ocr_installer.dart';
-import 'services/database.dart';
-import 'services/error_log_service.dart';
-import 'services/inspiration_image_store.dart';
-import 'services/inspiration_repository.dart';
-import 'services/notification_service.dart';
-import 'services/quick_settings_tile_bridge.dart';
-import 'services/reminder_repository.dart';
-import 'services/settings_repository.dart';
-import 'viewmodels/inspirations_view_model.dart';
-import 'viewmodels/reminders_view_model.dart';
-import 'viewmodels/settings_view_model.dart';
-import 'widgets/reminder_popup.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/router.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/services/ai_usage_guard.dart';
+import 'package:nousmind/services/backup_service.dart';
+import 'package:nousmind/services/chinese_ocr_installer.dart';
+import 'package:nousmind/services/database.dart';
+import 'package:nousmind/services/error_log_service.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/inspiration_repository.dart';
+import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/services/quick_settings_tile_bridge.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/services/settings_repository.dart';
+import 'package:nousmind/viewmodels/inspirations_view_model.dart';
+import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/reminder_popup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -248,9 +248,8 @@ class _RemindersAppState extends State<RemindersApp>
         // is satisfied even though `ChangeNotifierProvider` builds its
         // instance independently.
         Provider<AiUsageGuard>(
-          create: (context) => AiUsageGuard(
-            settings: context.read<SettingsViewModel>(),
-          ),
+          create: (context) =>
+              AiUsageGuard(settings: context.read<SettingsViewModel>()),
         ),
         ChangeNotifierProvider<RemindersViewModel>(
           create: (context) {
@@ -313,7 +312,7 @@ class _RemindersAppState extends State<RemindersApp>
         builder: (context, selected, _) {
           final seed = selected.seed.color;
           return MaterialApp.router(
-            title: '提醒事项',
+            title: 'NousMind',
             themeMode: selected.mode,
             theme: ThemeData(
               useMaterial3: true,
@@ -356,7 +355,7 @@ class _DatabaseErrorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '提醒事项',
+      title: 'NousMind',
       home: Scaffold(
         body: Center(
           child: Padding(

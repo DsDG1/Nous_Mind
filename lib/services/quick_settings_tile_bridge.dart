@@ -4,12 +4,12 @@ import 'dart:developer' as developer;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-import '../router.dart';
+import 'package:nousmind/router.dart';
 
 /// Bidirectional bridge between Dart and the Android Quick Settings Tile.
 ///
 /// Native side: `MainActivity` and `QuickAddTileService` in
-/// `android/app/src/main/kotlin/com/example/flutter_application_1/`.
+/// `android/app/src/main/kotlin/com/dsdogs/nousmind/`.
 /// Channel name: `quick_settings_tile`.
 ///
 /// Two events can flow into Dart:

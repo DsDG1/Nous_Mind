@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -22,33 +23,18 @@ class DataSettingsPage extends StatefulWidget {
 }
 
 class _DataSettingsPageState extends State<DataSettingsPage> {
-  StorageStats? _stats;
-  bool _loadingStats = true;
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _refreshStats();
+    unawaited(context.read<BackupService>().refreshStats());
     // Refresh the trash count whenever the page becomes visible so the
     // tile subtitle matches the actual on-disk state. The router pushes
     // us back here when the user returns from the trash page; using a
     // `didChangeDependencies` would also work but `initState` covers
     // the first paint and a manual refresh after navigation covers
     // the rest.
-  }
-
-  Future<void> _refreshStats() async {
-    setState(() => _loadingStats = true);
-    final backup = context.read<BackupService>();
-    // Use the cached refresh path so the home page's stats card picks up
-    // the new value via its ValueNotifier subscription at the same time.
-    final stats = await backup.refreshStats();
-    if (!mounted) return;
-    setState(() {
-      _stats = stats;
-      _loadingStats = false;
-    });
   }
 
   Future<void> _refreshTrashCount() async {
@@ -112,7 +98,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       final result = await backup.importFromFile(File(path));
       await remindersVm.refresh();
       await inspirationsVm.refresh();
-      await _refreshStats();
+      unawaited(backup.refreshStats());
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
@@ -167,12 +153,13 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final remindersVm = context.read<RemindersViewModel>();
+    final backup = context.read<BackupService>();
     // Snapshot the current list so the SnackBar's "撤销" button can
     // ask the view model to restore the same set in one click.
     final snapshot = List<String>.from(remindersVm.reminders.map((r) => r.id));
     try {
       final moved = await remindersVm.clearAllToTrash();
-      await _refreshStats();
+      unawaited(backup.refreshStats());
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
@@ -211,9 +198,10 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final inspirationsVm = context.read<InspirationsViewModel>();
+    final backup = context.read<BackupService>();
     try {
       final removed = await inspirationsVm.clearAll();
-      await _refreshStats();
+      unawaited(backup.refreshStats());
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
@@ -236,10 +224,11 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
     final messenger = ScaffoldMessenger.of(context);
     final remindersVm = context.read<RemindersViewModel>();
     final inspirationsVm = context.read<InspirationsViewModel>();
+    final backup = context.read<BackupService>();
     try {
       final r = await remindersVm.clearAll();
       final i = await inspirationsVm.clearAll();
-      await _refreshStats();
+      unawaited(backup.refreshStats());
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
@@ -288,7 +277,11 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                 title: '存储',
                 icon: Icons.storage_outlined,
                 children: <Widget>[
-                  _StatsRow(stats: _stats, loading: _loadingStats),
+                  ValueListenableBuilder<StorageStats?>(
+                    valueListenable:
+                        context.read<BackupService>().statsNotifier,
+                    builder: (context, stats, _) => _StatsRow(stats: stats),
+                  ),
                 ],
               ),
               SettingsSection(
@@ -368,14 +361,13 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
 
 /// Single read-only row showing the live storage stats.
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats, required this.loading});
+  const _StatsRow({required this.stats});
 
   final StorageStats? stats;
-  final bool loading;
 
   @override
   Widget build(BuildContext context) {
-    if (loading && stats == null) {
+    if (stats == null) {
       return const ListTile(
         leading: Icon(Icons.hourglass_empty),
         title: Text('正在加载……'),

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_application_1/services/ai_analyzer.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 

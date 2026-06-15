@@ -1,8 +1,8 @@
 import 'package:clock/clock.dart';
-import 'package:flutter_application_1/models/app_settings.dart';
-import 'package:flutter_application_1/services/ai_usage_guard.dart';
-import 'package:flutter_application_1/services/settings_repository.dart';
-import 'package:flutter_application_1/viewmodels/settings_view_model.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/services/ai_usage_guard.dart';
+import 'package:nousmind/services/settings_repository.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// In-memory [SettingsRepository] so the view model can persist without

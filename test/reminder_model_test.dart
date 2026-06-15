@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_application_1/models/reminder.dart';
+import 'package:nousmind/models/reminder.dart';
 
 void main() {
   final fixedTime = DateTime(2026, 6, 13, 18, 30);
