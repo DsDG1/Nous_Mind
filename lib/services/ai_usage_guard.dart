@@ -40,7 +40,8 @@ final class AcquireDailyLimitReached extends AcquireResult {
 ///   * **Cooldown** — a short in-process timer ([_defaultCooldown])
 ///     that prevents the same widget tree from firing two requests in
 ///     quick succession (covers the in-flight gap where
-///     `_isAiAnalyzing` has not yet flipped to true). Always on.
+///     [ReminderAiAdjustController.isAnalyzing] has not yet flipped
+///     to true). Always on.
 ///   * **Daily limit** — the persisted counter on [AppSettings] (see
 ///     [AppSettings.aiCallsToday] / [AppSettings.aiDailyLimit]), with
 ///     the day-rollover logic owned by [SettingsViewModel]. Only
