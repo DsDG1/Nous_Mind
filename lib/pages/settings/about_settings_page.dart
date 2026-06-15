@@ -50,6 +50,7 @@ class _AboutSettingsPageState extends State<AboutSettingsPage> {
           children: <Widget>[
             const _AppHeader(),
             _VersionSection(info: _packageInfo),
+            const _AgreementSection(),
             const _ErrorLogSection(),
             const _AboutSection(),
           ],
@@ -138,12 +139,6 @@ class _VersionSection extends StatelessWidget {
           subtitle: '查看本应用使用的第三方库的许可',
           onTap: () => _showLicenses(context),
         ),
-        SettingsTile(
-          leading: const Icon(Icons.privacy_tip_outlined),
-          title: '隐私政策',
-          subtitle: '了解本应用如何处理您的数据',
-          onTap: () => context.push('/settings/about/privacy'),
-        ),
       ],
     );
   }
@@ -165,6 +160,33 @@ class _VersionSection extends StatelessWidget {
         padding: EdgeInsets.all(8),
         child: Icon(Icons.notifications_active, size: 40),
       ),
+    );
+  }
+}
+
+/// Section grouping the legal documents (privacy policy + user agreement).
+class _AgreementSection extends StatelessWidget {
+  const _AgreementSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return SettingsSection(
+      title: '协议',
+      icon: Icons.gavel_outlined,
+      children: <Widget>[
+        SettingsTile(
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: '隐私政策',
+          subtitle: '了解本应用如何处理您的数据',
+          onTap: () => context.push('/settings/about/privacy'),
+        ),
+        SettingsTile(
+          leading: const Icon(Icons.description_outlined),
+          title: '用户协议',
+          subtitle: '本应用使用条款与法律约定',
+          onTap: () => context.push('/settings/about/user-agreement'),
+        ),
+      ],
     );
   }
 }

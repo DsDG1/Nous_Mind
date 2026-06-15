@@ -19,6 +19,7 @@ import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings/about_settings_page.dart';
 import 'pages/settings/privacy_policy_page.dart';
 import 'pages/settings/trash_page.dart';
+import 'pages/settings/user_agreement_page.dart';
 import 'pages/settings_page.dart';
 import 'widgets/circular_reveal_clip.dart';
 
@@ -187,6 +188,11 @@ final GoRouter router = GoRouter(
                     GoRoute(
                       path: 'privacy',
                       builder: (context, state) => const PrivacyPolicyPage(),
+                    ),
+                    GoRoute(
+                      path: 'user-agreement',
+                      builder: (context, state) =>
+                          const UserAgreementPage(),
                     ),
                   ],
                 ),

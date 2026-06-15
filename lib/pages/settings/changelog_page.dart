@@ -325,6 +325,13 @@ class _ChangelogVersion {
 /// the main page focused on just the latest.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.5.1',
+    notes: <String>[
+      '新增用户协议页面:设置 → 关于 → 协议 → 用户协议,中英双语 Markdown + 右上角语言切换',
+      '隐私政策与用户协议统一收纳到"协议"段,AppBar 右上角翻译图标可在中/英之间切换',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.5.0',
     notes: <String>[
       '新增「加入日历」功能:提醒列表右侧日历图标一键写入系统日历,失败时给出明确提示与跳转系统设置的入口',
