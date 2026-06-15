@@ -13,6 +13,7 @@ import 'package:nousmind/models/reminder_draft.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/image_preview.dart';
@@ -41,10 +42,19 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
 
   String? _imagePath;
   bool _picking = false;
-  bool _isAiAnalyzing = false;
   int _aiPressCount = 0;
   Timer? _aiPressTimer;
   String _timezone = 'UTC';
+
+  /// Reference to the AI flow controller supplied by the local
+  /// [ChangeNotifierProvider] in [build]. Stored on the state so
+  /// the state's `context` (which sits *above* that provider) can
+  /// still reach the controller for [_handleAiEvent].
+  ReminderAiAdjustController? _aiController;
+
+  /// Subscription to the controller's event stream. Wired up on
+  /// the first build and torn down in [dispose].
+  StreamSubscription<AiAdjustEvent>? _aiEventSub;
 
   @override
   void initState() {
@@ -60,6 +70,9 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
 
   @override
   void dispose() {
+    _aiEventSub?.cancel();
+    _aiEventSub = null;
+    _aiController = null;
     _titleController.dispose();
     _descriptionController.dispose();
     _aiPressTimer?.cancel();
@@ -132,209 +145,125 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     }
   }
 
+  /// Thin wrapper that hands the current form snapshot to
+  /// [ReminderAiAdjustController.adjust]. Every branch decision
+  /// (pre-flight checks, confirm dialog, single vs multi, success vs
+  /// error) lives in the controller and is delivered back as
+  /// [AiAdjustEvent]s handled in [_handleAiEvent].
   Future<void> _runAiAdjust() async {
-    final settings = context.read<SettingsViewModel>().settings;
-    if (!settings.aiAssistantEnabled) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('请先在 设置 → AI 助手 中启用 AI 助手')),
-        );
-      return;
-    }
-    final apiKey = settings.aiApiKey;
-    if (apiKey == null || apiKey.trim().isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('请先在 设置 → AI 助手 中填写 API 密钥')),
-        );
-      return;
-    }
+    final controller = _aiController;
+    if (controller == null) return;
+    await controller.adjust(
+      title: _titleController.text.trim(),
+      description: _descriptionController.text.trim(),
+      reminderTime: _reminderTime,
+      imagePath: _imagePath,
+      timezone: _timezone,
+    );
+  }
 
-    // Misclick guard: confirm with the user before charging a call
-    // against the daily budget. The guard's tryAcquire below is the
-    // authoritative gate, but popping the dialog first means the
-    // user can cancel without burning their quota on a typo.
-    final guard = context.read<AiUsageGuard>();
-    final verdict = guard.tryAcquire();
-    if (verdict is AcquireCooldown) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试'),
-          ),
-        );
-      return;
-    }
-    if (verdict is AcquireDailyLimitReached) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              '今日 AI 调用已达上限(${verdict.limit}/${verdict.limit}),'
-              '明天自动恢复或前往设置调整',
-            ),
-          ),
-        );
-      return;
-    }
-    final allowed = verdict as AcquireAllowed;
+  /// Translates each [AiAdjustEvent] into the matching Flutter
+  /// primitive. Mounted checks after every `await` keep the editor
+  /// from touching `BuildContext` after the page has been disposed.
+  Future<void> _handleAiEvent(AiAdjustEvent event) async {
     if (!mounted) return;
-    final confirmed = await _confirmAiCall(remaining: allowed.remaining);
-    if (!confirmed) return;
-    if (!mounted) return;
-
-    final analyzer = context.read<AiAnalyzer>();
-    final messenger = ScaffoldMessenger.of(context);
-    final title = _titleController.text.trim();
-    final description = _descriptionController.text.trim();
-
-    setState(() => _isAiAnalyzing = true);
-    try {
-      final drafts = await analyzer.adjustReminder(
-        title: title.isEmpty ? null : title,
-        description: description.isEmpty ? null : description,
-        imagePath: _imagePath,
-        apiKey: apiKey,
-        timezone: _timezone,
-        now: DateTime.now(),
-        systemPromptTemplate: settings.aiAdjustPrompt,
-      );
-      if (!mounted) return;
-      await guard.recordSuccess();
-      if (drafts.isEmpty) {
-        messenger
+    switch (event) {
+      case ShowSnackBarEvent(:final message):
+        ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('AI 未识别到可调整的内容')));
-      } else if (drafts.length == 1) {
-        final draft = drafts.first;
+          ..showSnackBar(SnackBar(content: Text(message)));
+      case ApplyDraftEvent(
+          :final title,
+          :final description,
+          :final reminderTime,
+        ):
         setState(() {
-          _titleController.text = draft.title;
-          if (draft.description != null && draft.description!.isNotEmpty) {
-            _descriptionController.text = draft.description!;
+          _titleController.text = title;
+          if (description != null && description.isNotEmpty) {
+            _descriptionController.text = description;
           }
-          _reminderTime = draft.suggestedTime;
+          _reminderTime = reminderTime;
         });
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('AI 已自动调整')));
-      } else {
-        _showBatchConfirmSheet(drafts);
-      }
-    } on AiAnalysisException catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(error.message)));
-    } on Exception catch (error, stackTrace) {
-      developer.log('AI adjust failed', error: error, stackTrace: stackTrace);
-      if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('AI 调整失败,请稍后重试')));
-    } finally {
-      if (mounted) setState(() => _isAiAnalyzing = false);
-    }
-  }
-
-  /// Pops a confirm dialog so an accidental double-tap cannot silently
-  /// burn one of the user's daily AI calls. Returns `true` only when
-  /// the user explicitly taps "调用 AI". When the daily-quota switch
-  /// is off, [remaining] is `null` and the dialog copy reflects the
-  /// unlimited state instead of showing "-1".
-  Future<bool> _confirmAiCall({required int? remaining}) async {
-    final quotaLine = remaining == null
-        ? '今日不限制调用次数,是否继续?'
-        : '将消耗 1 次 AI 调用(今日剩余 $remaining 次),是否继续?';
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('确认调用 AI'),
-          content: Text(quotaLine),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('调用 AI'),
-            ),
-          ],
+      case PopEvent():
+        context.pop();
+      case ShowConfirmDialogEvent(:final quotaLine):
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('确认调用 AI'),
+              content: Text(quotaLine),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('调用 AI'),
+                ),
+              ],
+            );
+          },
         );
-      },
-    );
-    return result ?? false;
-  }
-
-  Future<void> _showBatchConfirmSheet(List<ReminderDraft> drafts) async {
-    final selectedIndices = await showModalBottomSheet<List<int>>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (_) => _BatchConfirmSheet(drafts: drafts),
-    );
-    if (selectedIndices == null || selectedIndices.isEmpty || !mounted) return;
-    final selectedDrafts = [for (final i in selectedIndices) drafts[i]];
-    final vm = context.read<RemindersViewModel>();
-    final messenger = ScaffoldMessenger.of(context);
-    await vm.addMultiple(
-      selectedDrafts
-          .map(
-            (d) => (
-              title: d.title,
-              reminderTime: d.suggestedTime,
-              description: d.description,
-            ),
-          )
-          .toList(),
-    );
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已添加 ${selectedDrafts.length} 项')));
-    if (mounted) context.pop();
+        if (!mounted) return;
+        _aiController?.onConfirmDialogResult(result ?? false);
+      case ShowBatchSheetEvent(:final drafts):
+        final selected = await showModalBottomSheet<List<int>>(
+          context: context,
+          isScrollControlled: true,
+          showDragHandle: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          builder: (_) => _BatchConfirmSheet(drafts: drafts),
+        );
+        if (!mounted) return;
+        _aiController?.onBatchSheetResult(selected);
+    }
   }
 
   Widget _buildAiButton() {
-    final settings = context.watch<SettingsViewModel>().settings;
-    final canUseAi =
-        settings.aiAssistantEnabled &&
-        (settings.aiApiKey?.trim().isNotEmpty ?? false);
-    if (!canUseAi) {
-      return IconButton(
-        icon: const Icon(Icons.auto_awesome),
-        tooltip: '请先在设置中启用 AI 助手',
-        onPressed: null,
-      );
-    }
-    if (_isAiAnalyzing) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-    final colors = Theme.of(context).colorScheme;
-    return IconButton(
-      icon: Icon(
-        Icons.auto_awesome,
-        color: _aiPressCount > 0 ? colors.primary : null,
-      ),
-      tooltip: _aiPressCount > 0 ? '再按一次以 AI 分析' : 'AI 自动调整',
-      onPressed: _onAiPressed,
+    // The per-page [ChangeNotifierProvider] in [build] is below
+    // this state, so the state's outer `context` cannot see the
+    // controller. Wrap in a [Consumer] so the builder's own context
+    // has the controller as an ancestor — also scopes the
+    // `notifyListeners` rebuild to just the AI button instead of
+    // the whole Scaffold.
+    return Consumer<ReminderAiAdjustController>(
+      builder: (context, controller, _) {
+        final settings = context.watch<SettingsViewModel>().settings;
+        final isAnalyzing = controller.isAnalyzing;
+        final canUseAi =
+            settings.aiAssistantEnabled &&
+            (settings.aiApiKey?.trim().isNotEmpty ?? false);
+        if (!canUseAi) {
+          return const IconButton(
+            icon: Icon(Icons.auto_awesome),
+            tooltip: '请先在设置中启用 AI 助手',
+            onPressed: null,
+          );
+        }
+        if (isAnalyzing) {
+          return const Padding(
+            padding: EdgeInsets.all(12),
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
+        }
+        final colors = Theme.of(context).colorScheme;
+        return IconButton(
+          icon: Icon(
+            Icons.auto_awesome,
+            color: _aiPressCount > 0 ? colors.primary : null,
+          ),
+          tooltip: _aiPressCount > 0 ? '再按一次以 AI 分析' : 'AI 自动调整',
+          onPressed: _onAiPressed,
+        );
+      },
     );
   }
 
@@ -421,6 +350,32 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
 
   @override
   Widget build(BuildContext context) {
+    // The AI flow controller is local to this page so it is disposed
+    // automatically when the editor closes. The state's own
+    // `context` is *above* this provider, so the [Builder] below
+    // exposes a child context that can read it — and is also the
+    // hook for wiring the event subscription on the first build.
+    return ChangeNotifierProvider<ReminderAiAdjustController>(
+      create: (ctx) => ReminderAiAdjustController(
+        settings: ctx.read<SettingsViewModel>(),
+        guard: ctx.read<AiUsageGuard>(),
+        analyzer: ctx.read<AiAnalyzer>(),
+        reminderAdder: (drafts) =>
+            ctx.read<RemindersViewModel>().addMultiple(drafts),
+      ),
+      child: Builder(
+        builder: (innerCtx) {
+          if (_aiController == null) {
+            _aiController = innerCtx.read<ReminderAiAdjustController>();
+            _aiEventSub = _aiController!.events.listen(_handleAiEvent);
+          }
+          return _buildScaffold(innerCtx);
+        },
+      ),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
