@@ -561,7 +561,8 @@ requires.
       return recognized.text;
     } catch (error, stackTrace) {
       developer.log(
-        'OCR failed for $imagePath (script=${script.name})',
+        'OCR failed for $imagePath '
+        '(script=${script.name}, errorType=${error.runtimeType})',
         error: error,
         stackTrace: stackTrace,
       );
