@@ -325,6 +325,19 @@ class _ChangelogVersion {
 /// the main page focused on just the latest.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.5.2',
+    notes: <String>[
+      '编辑器「AI 自动调整」拆为独立 ReminderAiAdjustController,流程更稳定,修复偶发灰屏',
+      'AI 助手新增「调用前确认」弹窗,防止误触烧额度',
+      'AI 助手新增「今日用量」上限与 10 秒冷却,可一键开关与调整',
+      '加入 ML Kit ProGuard keep 规则,发布包中文 OCR 不再静默回退到「截图识别失败」',
+      '隐私政策 / 用户协议统一收纳到「设置 → 关于 → 协议」,AppBar 右上角翻译图标可在中/英之间切换',
+      '用户协议改写为基于 MIT 开源协议,补充预编译 App 注意事项',
+      '提醒列表新增「加入系统日历」入口,失败时给出提示与跳转系统设置的入口',
+      '错误日志支持一键 AI 诊断',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.5.1',
     notes: <String>[
       '新增用户协议页面:设置 → 关于 → 协议 → 用户协议,中英双语 Markdown + 右上角语言切换',
