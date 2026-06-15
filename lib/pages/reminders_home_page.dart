@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/reminder.dart';
+import '../services/calendar_service.dart';
 import '../viewmodels/reminders_view_model.dart';
 import '../widgets/create_reminder_sheet.dart';
 import '../widgets/empty_state.dart';
@@ -19,6 +20,7 @@ class RemindersHomePage extends StatefulWidget {
 
 class _RemindersHomePageState extends State<RemindersHomePage> {
   final GlobalKey _fabKey = GlobalKey();
+  final CalendarService _calendar = CalendarService();
 
   Future<void> _openEditor(BuildContext context, Reminder? existing) async {
     final fabRenderBox =
@@ -63,6 +65,21 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       );
   }
 
+  Future<void> _addToCalendarWithFeedback(Reminder reminder) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final granted = await _calendar.requestPermissions();
+    if (!granted) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('未授予日历写入权限')));
+      return;
+    }
+    final ok = await _calendar.addReminder(reminder);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(ok ? '已加入日历' : '已取消')));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,6 +107,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
                 onTap: () => _openEditor(context, reminder),
                 onDelete: () =>
                     _deleteWithFeedback(context, viewModel, reminder),
+                onAddToCalendar: () => _addToCalendarWithFeedback(reminder),
               );
             },
           );

@@ -7,6 +7,7 @@ import '../utils/date_format.dart';
 ///
 /// The row exposes:
 ///   * a tap to open the editor (handled by the parent)
+///   * a trailing calendar-icon button that triggers [onAddToCalendar]
 ///   * a left swipe that triggers [onDelete] and shows a [SnackBar]
 class ReminderListItem extends StatelessWidget {
   const ReminderListItem({
@@ -14,11 +15,13 @@ class ReminderListItem extends StatelessWidget {
     required this.reminder,
     required this.onTap,
     required this.onDelete,
+    required this.onAddToCalendar,
   });
 
   final Reminder reminder;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback onAddToCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +44,11 @@ class ReminderListItem extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         subtitle: Text(formatDateTime(reminder.reminderTime)),
+        trailing: IconButton(
+          icon: const Icon(Icons.event_available_outlined),
+          tooltip: '加入日历',
+          onPressed: onAddToCalendar,
+        ),
       ),
     );
   }

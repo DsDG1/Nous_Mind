@@ -8,6 +8,10 @@
 	<string>用于拍摄灵感照片</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>用于从相册选择灵感图片</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>用于将提醒添加到系统日历</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>用于将提醒添加到系统日历</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
