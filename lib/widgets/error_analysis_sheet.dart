@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/ai_analyzer.dart';
+import '../services/ai_usage_guard.dart';
 import '../services/error_log_service.dart';
 
 /// Modal bottom sheet that runs [AiAnalyzer.analyzeError] against an
@@ -20,12 +21,14 @@ class ErrorAnalysisSheet extends StatefulWidget {
     required this.analyzer,
     required this.apiKey,
     required this.systemPrompt,
+    required this.guard,
   });
 
   final ErrorLogEntry entry;
   final AiAnalyzer analyzer;
   final String apiKey;
   final String? systemPrompt;
+  final AiUsageGuard guard;
 
   /// Opens the sheet and awaits its dismissal. There is no return value
   /// — the analysis is purely informational and is not persisted.
@@ -34,6 +37,7 @@ class ErrorAnalysisSheet extends StatefulWidget {
     required ErrorLogEntry entry,
     required AiAnalyzer analyzer,
     required String apiKey,
+    required AiUsageGuard guard,
     String? systemPrompt,
   }) {
     return showModalBottomSheet<void>(
@@ -45,6 +49,7 @@ class ErrorAnalysisSheet extends StatefulWidget {
         analyzer: analyzer,
         apiKey: apiKey,
         systemPrompt: systemPrompt,
+        guard: guard,
       ),
     );
   }
@@ -61,10 +66,37 @@ class _ErrorAnalysisSheetState extends State<ErrorAnalysisSheet> {
   @override
   void initState() {
     super.initState();
-    _runAnalysis();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _runAnalysis();
+    });
   }
 
+  /// Re-checks the usage guard before every call (initial run AND
+  /// "重试" presses). The guard owns the cooldown clock and the daily
+  /// counter, so each entry point asks it before charging a token.
   Future<void> _runAnalysis() async {
+    final verdict = widget.guard.tryAcquire();
+    if (verdict is AcquireCooldown) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = AiCooldownException(
+          'AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试',
+        );
+      });
+      return;
+    }
+    if (verdict is AcquireDailyLimitReached) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = AiUsageLimitException(
+          '今日 AI 调用已达上限(${verdict.limit}/${verdict.limit}),'
+          '明天自动恢复或前往设置调整',
+        );
+      });
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -75,6 +107,8 @@ class _ErrorAnalysisSheetState extends State<ErrorAnalysisSheet> {
         apiKey: widget.apiKey,
         systemPrompt: widget.systemPrompt,
       );
+      if (!mounted) return;
+      await widget.guard.recordSuccess();
       if (!mounted) return;
       setState(() {
         _busy = false;

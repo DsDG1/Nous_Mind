@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import 'models/inspiration.dart';
 import 'models/reminder.dart';
-import 'pages/ai_assistant_page.dart';
 import 'pages/app_shell.dart';
 import 'pages/inspiration_editor_page.dart';
 import 'pages/inspirations_home_page.dart';
@@ -18,6 +17,7 @@ import 'pages/settings/data_settings_page.dart';
 import 'pages/settings/local_ocr_settings_page.dart';
 import 'pages/settings/notification_settings_page.dart';
 import 'pages/settings/about_settings_page.dart';
+import 'pages/settings/privacy_policy_page.dart';
 import 'pages/settings/trash_page.dart';
 import 'pages/settings_page.dart';
 import 'widgets/circular_reveal_clip.dart';
@@ -58,37 +58,49 @@ final GoRouter router = GoRouter(
                   path: 'editor',
                   parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
-                    final extra = state.extra as (Reminder?, Offset);
+                    final extra = state.extra as (Reminder?, Offset?);
+                    final reminder = extra.$1;
+                    final center = extra.$2;
+
+                    if (center != null) {
+                      return CustomTransitionPage(
+                        key: state.pageKey,
+                        child: ReminderEditorPage(initial: reminder),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              return CircularRevealTransition(
+                                animation: animation,
+                                center: center,
+                                child: child,
+                              );
+                            },
+                      );
+                    }
+
                     return CustomTransitionPage(
                       key: state.pageKey,
-                      child: ReminderEditorPage(initial: extra.$1),
+                      child: ReminderEditorPage(initial: reminder),
+                      transitionDuration: const Duration(milliseconds: 300),
+                      reverseTransitionDuration: const Duration(
+                        milliseconds: 300,
+                      ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
-                            return CircularRevealTransition(
-                              animation: animation,
-                              center: extra.$2,
-                              child: child,
+                            final curved = CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutCubic,
+                            );
+                            return FadeTransition(
+                              opacity: curved,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0, 0.08),
+                                  end: Offset.zero,
+                                ).animate(curved),
+                                child: child,
+                              ),
                             );
                           },
-                    );
-                  },
-                ),
-                GoRoute(
-                  path: 'assistant',
-                  parentNavigatorKey: rootNavigatorKey,
-                  pageBuilder: (context, state) {
-                    final center = state.extra is Offset
-                        ? state.extra as Offset
-                        : const Offset(0.5, 0.5);
-                    return CustomTransitionPage(
-                      key: state.pageKey,
-                      child: const AiAssistantPage(),
-                      transitionsBuilder: (_, animation, _, child) =>
-                          CircularRevealTransition(
-                            animation: animation,
-                            center: center,
-                            child: child,
-                          ),
                     );
                   },
                 ),
@@ -171,6 +183,12 @@ final GoRouter router = GoRouter(
                 GoRoute(
                   path: 'about',
                   builder: (context, state) => const AboutSettingsPage(),
+                  routes: <RouteBase>[
+                    GoRoute(
+                      path: 'privacy',
+                      builder: (context, state) => const PrivacyPolicyPage(),
+                    ),
+                  ],
                 ),
               ],
             ),

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/ai_analyzer.dart';
 import '../../viewmodels/settings_view_model.dart';
 import '../../widgets/settings_section.dart';
 
-/// Settings subpage for editing the three system prompts used by the AI
-/// surfaces (reminder extraction, text polish, error analysis). Each
-/// field shows the built-in default when nothing is stored. Leaving a
-/// field empty saves `null`, which makes [AiAnalyzer] fall back to its
-/// hard-coded default at call time. The extraction prompt supports
-/// runtime placeholders that are substituted by
+/// Settings subpage for editing the system prompts used by the AI
+/// surfaces (error analysis, reminder adjustment). Each field shows
+/// the built-in default when nothing is stored. Leaving a field empty
+/// saves `null`, which makes [AiAnalyzer] fall back to its hard-coded
+/// default at call time. The adjustment prompt supports runtime
+/// placeholders that are substituted by
 /// [DeepSeekAnalyzer.renderAssistantPrompt].
 class AiPromptsSettingsPage extends StatefulWidget {
   const AiPromptsSettingsPage({super.key});
@@ -20,43 +21,36 @@ class AiPromptsSettingsPage extends StatefulWidget {
 }
 
 class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
-  late final TextEditingController _assistantController;
-  late final TextEditingController _polishController;
   late final TextEditingController _errorAnalysisController;
+  late final TextEditingController _adjustController;
 
   @override
   void initState() {
     super.initState();
     final settings = context.read<SettingsViewModel>().settings;
-    _assistantController = TextEditingController(
-      text:
-          settings.aiAssistantPrompt ??
-          DeepSeekAnalyzer.defaultAssistantPromptTemplate,
-    );
-    _polishController = TextEditingController(
-      text: settings.aiPolishPrompt ?? DeepSeekAnalyzer.defaultPolishPrompt,
-    );
     _errorAnalysisController = TextEditingController(
       text:
           settings.aiErrorAnalysisPrompt ??
           DeepSeekAnalyzer.defaultErrorAnalysisPrompt,
     );
+    _adjustController = TextEditingController(
+      text:
+          settings.aiAdjustPrompt ??
+          DeepSeekAnalyzer.defaultAdjustPromptTemplate,
+    );
   }
 
   @override
   void dispose() {
-    _assistantController.dispose();
-    _polishController.dispose();
     _errorAnalysisController.dispose();
+    _adjustController.dispose();
     super.dispose();
   }
 
-  Future<void> _saveAssistant(SettingsViewModel vm) =>
-      _saveFor(vm.setAiAssistantPrompt, _assistantController.text);
-  Future<void> _savePolish(SettingsViewModel vm) =>
-      _saveFor(vm.setAiPolishPrompt, _polishController.text);
   Future<void> _saveErrorAnalysis(SettingsViewModel vm) =>
       _saveFor(vm.setAiErrorAnalysisPrompt, _errorAnalysisController.text);
+  Future<void> _saveAdjust(SettingsViewModel vm) =>
+      _saveFor(vm.setAiAdjustPrompt, _adjustController.text);
 
   Future<void> _saveFor(
     Future<void> Function(String?) setter,
@@ -69,21 +63,66 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
       ..showSnackBar(const SnackBar(content: Text('已保存')));
   }
 
-  Future<void> _resetAssistant(SettingsViewModel vm) async {
-    _assistantController.text = DeepSeekAnalyzer.defaultAssistantPromptTemplate;
-    await vm.setAiAssistantPrompt(null);
-    _notifyReset();
+  /// Pops a read-only dialog showing how the placeholder values will
+  /// be substituted when the prompt is actually sent to the model.
+  /// Lets the user eyeball the rendered text before saving — useful
+  /// because a typo in `{{tomorrow}}` looks identical to the literal
+  /// characters on the editor surface.
+  Future<void> _previewAdjust() async {
+    final template = _adjustController.text.trim().isEmpty
+        ? DeepSeekAnalyzer.defaultAdjustPromptTemplate
+        : _adjustController.text;
+    final timezone = await _resolveTimezone();
+    if (!mounted) return;
+    final rendered = DeepSeekAnalyzer.renderAssistantPrompt(
+      template: template,
+      timezone: timezone,
+      now: DateTime.now(),
+    );
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('渲染预览'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                rendered,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  Future<void> _resetPolish(SettingsViewModel vm) async {
-    _polishController.text = DeepSeekAnalyzer.defaultPolishPrompt;
-    await vm.setAiPolishPrompt(null);
-    _notifyReset();
+  Future<String> _resolveTimezone() async {
+    try {
+      final info = await FlutterTimezone.getLocalTimezone();
+      return info.identifier;
+    } on Exception {
+      return 'UTC';
+    }
   }
 
   Future<void> _resetErrorAnalysis(SettingsViewModel vm) async {
     _errorAnalysisController.text = DeepSeekAnalyzer.defaultErrorAnalysisPrompt;
     await vm.setAiErrorAnalysisPrompt(null);
+    _notifyReset();
+  }
+
+  Future<void> _resetAdjust(SettingsViewModel vm) async {
+    _adjustController.text = DeepSeekAnalyzer.defaultAdjustPromptTemplate;
+    await vm.setAiAdjustPrompt(null);
     _notifyReset();
   }
 
@@ -111,28 +150,6 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
                 ),
                 const SizedBox(height: 12),
                 _PromptSection(
-                  title: '提醒提取',
-                  icon: Icons.event_note_outlined,
-                  controller: _assistantController,
-                  isCustomized: s.aiAssistantPrompt != null,
-                  helper:
-                      '可用占位符:{{now}}、{{timezone}}、{{offset}}、{{weekday}}、{{tomorrow}}'
-                      '。删除占位符即不再注入对应运行时变量。',
-                  onSave: () => _saveAssistant(vm),
-                  onReset: () => _resetAssistant(vm),
-                ),
-                const SizedBox(height: 12),
-                _PromptSection(
-                  title: '文本润色',
-                  icon: Icons.auto_fix_high_outlined,
-                  controller: _polishController,
-                  isCustomized: s.aiPolishPrompt != null,
-                  helper: '原样发送给模型,无占位符。',
-                  onSave: () => _savePolish(vm),
-                  onReset: () => _resetPolish(vm),
-                ),
-                const SizedBox(height: 12),
-                _PromptSection(
                   title: '错误日志分析',
                   icon: Icons.bug_report_outlined,
                   controller: _errorAnalysisController,
@@ -140,6 +157,19 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
                   helper: '原样发送给模型,无占位符。',
                   onSave: () => _saveErrorAnalysis(vm),
                   onReset: () => _resetErrorAnalysis(vm),
+                ),
+                const SizedBox(height: 12),
+                _PromptSection(
+                  title: '提醒调整',
+                  icon: Icons.auto_fix_high_outlined,
+                  controller: _adjustController,
+                  isCustomized: s.aiAdjustPrompt != null,
+                  helper:
+                      '可用占位符:{{now}}、{{timezone}}、{{offset}}、{{weekday}}'
+                      '。删除占位符即不再注入对应运行时变量。',
+                  onSave: () => _saveAdjust(vm),
+                  onReset: () => _resetAdjust(vm),
+                  onPreview: _previewAdjust,
                 ),
               ],
             );
@@ -159,6 +189,7 @@ class _PromptSection extends StatelessWidget {
     required this.helper,
     required this.onSave,
     required this.onReset,
+    this.onPreview,
   });
 
   final String title;
@@ -168,6 +199,7 @@ class _PromptSection extends StatelessWidget {
   final String helper;
   final VoidCallback onSave;
   final VoidCallback onReset;
+  final VoidCallback? onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +232,7 @@ class _PromptSection extends StatelessWidget {
             controller: controller,
             minLines: 6,
             maxLines: 14,
+            maxLength: 2000,
             autocorrect: false,
             enableSuggestions: false,
             decoration: InputDecoration(
@@ -213,19 +246,26 @@ class _PromptSection extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Row(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: <Widget>[
               FilledButton.icon(
                 onPressed: onSave,
                 icon: const Icon(Icons.save_outlined),
                 label: const Text('保存'),
               ),
-              const SizedBox(width: 12),
               TextButton.icon(
                 onPressed: onReset,
                 icon: const Icon(Icons.restore_outlined),
                 label: const Text('恢复默认'),
               ),
+              if (onPreview != null)
+                TextButton.icon(
+                  onPressed: onPreview,
+                  icon: const Icon(Icons.preview_outlined),
+                  label: const Text('渲染预览'),
+                ),
             ],
           ),
         ),

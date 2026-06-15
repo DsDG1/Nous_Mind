@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'models/app_settings.dart';
 import 'router.dart';
 import 'services/ai_analyzer.dart';
+import 'services/ai_usage_guard.dart';
 import 'services/backup_service.dart';
 import 'services/chinese_ocr_installer.dart';
 import 'services/database.dart';
@@ -21,7 +22,6 @@ import 'services/notification_service.dart';
 import 'services/quick_settings_tile_bridge.dart';
 import 'services/reminder_repository.dart';
 import 'services/settings_repository.dart';
-import 'viewmodels/ai_assist_view_model.dart';
 import 'viewmodels/inspirations_view_model.dart';
 import 'viewmodels/reminders_view_model.dart';
 import 'viewmodels/settings_view_model.dart';
@@ -242,6 +242,16 @@ class _RemindersAppState extends State<RemindersApp>
             initialSettings: widget.initialSettings,
           ),
         ),
+        // Wraps the AI usage quota + cooldown clock. Reads through the
+        // SettingsViewModel above; the provider's `create` callback
+        // runs lazily on first `context.watch/read`, so the dependency
+        // is satisfied even though `ChangeNotifierProvider` builds its
+        // instance independently.
+        Provider<AiUsageGuard>(
+          create: (context) => AiUsageGuard(
+            settings: context.read<SettingsViewModel>(),
+          ),
+        ),
         ChangeNotifierProvider<RemindersViewModel>(
           create: (context) {
             final settings = context.read<SettingsViewModel>();
@@ -279,26 +289,18 @@ class _RemindersAppState extends State<RemindersApp>
         ChangeNotifierProvider<ErrorLogService>(
           create: (_) => attachGlobalErrorLog(ErrorLogService()),
         ),
-        ChangeNotifierProvider<AiAssistViewModel>(
+        ChangeNotifierProvider<ChineseOcrInstaller>(
+          create: (_) => ChineseOcrInstaller(),
+        ),
+        Provider<AiAnalyzer>(
           create: (context) {
-            // Wire the analyzer to the live settings view model so
-            // toggling 中文 OCR in settings takes effect on the next
-            // assistant invocation without rebuilding the singleton.
             widget.aiAnalyzer.setChineseOcrProvider(
               () =>
                   context.read<SettingsViewModel>().settings.chineseOcrEnabled,
             );
-            return AiAssistViewModel(
-              widget.aiAnalyzer,
-              settings: context.read<SettingsViewModel>(),
-              errorLog: context.read<ErrorLogService>(),
-            );
+            return widget.aiAnalyzer;
           },
         ),
-        ChangeNotifierProvider<ChineseOcrInstaller>(
-          create: (_) => ChineseOcrInstaller(),
-        ),
-        Provider<AiAnalyzer>.value(value: widget.aiAnalyzer),
         Provider<InspirationImageStore>.value(value: widget.imageStore),
         Provider<NotificationService>.value(value: widget.notifications),
         Provider<BackupService>.value(value: _backup),

@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/ai_analyzer.dart';
+import '../../services/ai_usage_guard.dart';
 import '../../services/error_log_service.dart';
 import '../../viewmodels/settings_view_model.dart';
 import '../../widgets/error_analysis_sheet.dart';
@@ -136,6 +137,12 @@ class _VersionSection extends StatelessWidget {
           title: '开源许可',
           subtitle: '查看本应用使用的第三方库的许可',
           onTap: () => _showLicenses(context),
+        ),
+        SettingsTile(
+          leading: const Icon(Icons.privacy_tip_outlined),
+          title: '隐私政策',
+          subtitle: '了解本应用如何处理您的数据',
+          onTap: () => context.push('/settings/about/privacy'),
         ),
       ],
     );
@@ -296,6 +303,7 @@ class _ErrorEntryCard extends StatelessWidget {
       entry: entry,
       analyzer: context.read<AiAnalyzer>(),
       apiKey: settings.aiApiKey!,
+      guard: context.read<AiUsageGuard>(),
       systemPrompt: settings.aiErrorAnalysisPrompt,
     );
   }

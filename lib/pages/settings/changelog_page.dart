@@ -318,11 +318,41 @@ class _ChangelogVersion {
 }
 
 /// Newest-first list of human-facing release notes for the *current*
-/// major series (1.3.x). Edit this list when shipping a new 1.3.x patch;
-/// when graduating to 1.4 the policy is to move the 1.3.x entries
-/// into [_changelogHistory] manually (see the "查看历史版本" entry point
-/// on the main page).
+/// and the immediately previous major series (1.5.x + 1.4.0). Edit this
+/// list when shipping a new 1.5.x patch. When the next major bumps to
+/// 1.6, the choice is yours: either keep 1.5.x + 1.4.0 on the main page
+/// (current policy) or graduate 1.5.x into [_changelogHistory] to keep
+/// the main page focused on just the latest.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
+  _ChangelogVersion(
+    version: '1.5.0',
+    notes: <String>[
+      '新增「加入日历」功能:提醒列表右侧日历图标一键写入系统日历,失败时给出明确提示与跳转系统设置的入口',
+      'AI 防滥用加固:每日调用上限 + 10 秒冷却窗口,「设置 → AI 助手 → 今日 AI 用量」可一键开关与调整上限',
+      'AI 误触防护:编辑页 AI 按钮改为弹窗确认后调用,避免手抖烧额度',
+      'AI 输入清洗:自动截断过长输入、剥离控制字符、附加反信息抽取附录,自定义提示词加 2000 字上限并支持渲染预览',
+      '新增隐私政策页面:设置 → 关于 → 隐私政策,中英双语 Markdown',
+    ],
+  ),
+  _ChangelogVersion(
+    version: '1.4.0',
+    notes: <String>[
+      '真·可以用了！好用了',
+      '合并「新增提醒」和「新增提醒（AI）」为统一页面，不再弹出选择弹窗',
+      'AI 按钮移至编辑页右上角，连按 2 次触发，防止误触',
+      'AI 根据截图 OCR + 已填标题/描述，自动调整标题、描述、时间',
+      '截图含多条提醒时弹出确认弹窗，支持勾选后批量创建',
+      'AI 返回的描述字段现在正确解析，不再丢失',
+      '新增「提醒调整」prompt 自定义（设置 → AI 助手 → 提示词）',
+      '清理废弃代码：旧 AI 助手页面、文本润色功能及其相关组件',
+    ],
+  ),
+];
+
+/// Versions retired from the main changelog page. They still ship with
+/// the app and are reachable via the "查看历史版本" button. Kept in the
+/// same newest-first ordering for visual consistency.
+const List<_ChangelogVersion> _changelogHistory = <_ChangelogVersion>[
   _ChangelogVersion(
     version: '1.3.1',
     notes: <String>[
@@ -343,12 +373,6 @@ const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
       '备份导出不再包含已删除的提醒',
     ],
   ),
-];
-
-/// Versions retired from the main changelog page. They still ship with
-/// the app and are reachable via the "查看历史版本" button. Kept in the
-/// same newest-first ordering for visual consistency.
-const List<_ChangelogVersion> _changelogHistory = <_ChangelogVersion>[
   _ChangelogVersion(
     version: '1.2.6',
     notes: <String>[

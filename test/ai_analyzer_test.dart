@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,11 +7,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
-  // A fixed clock used by every test below. The analyzer only reads
-  // [AiAnalyzer.analyze]'s `now` parameter to render the "当前日期与时间"
+  // A fixed clock used by every test below. The analyzer reads
+  // [adjustReminder]'s `now` parameter to render the "当前日期与时间"
   // line in the system prompt; using a constant keeps the assertions
   // stable regardless of when the test suite is executed.
-  final DateTime fixedNow = DateTime(2026, 6, 13);
   final DateTime fixedNowWithTime = DateTime(2026, 6, 13, 10, 0);
 
   group('parseAssistantJson', () {
@@ -175,344 +173,6 @@ void main() {
     });
   });
 
-  group('DeepSeekAnalyzer HTTP contract', () {
-    test('returns parsed drafts on 200 response (no image path)', () async {
-      final canned = <String, dynamic>{
-        'choices': <Map<String, dynamic>>[
-          <String, dynamic>{
-            'message': <String, dynamic>{
-              'content': jsonEncode(<String, dynamic>{
-                'reminders': <Map<String, String>>[
-                  <String, String>{
-                    'title': '开会',
-                    'suggested_time': '2026-06-15T15:00:00+08:00',
-                  },
-                ],
-              }),
-            },
-          },
-        ],
-      };
-      final client = MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(
-          request.url.toString(),
-          'https://api.deepseek.com/v1/chat/completions',
-        );
-        expect(request.headers['Authorization'], 'Bearer test-key');
-        expect(request.headers['Content-Type'], contains('application/json'));
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'deepseek-v4-flash');
-        expect(body['response_format'], <String, String>{
-          'type': 'json_object',
-        });
-        expect(body['thinking'], <String, String>{'type': 'disabled'});
-        final messages = body['messages'] as List<dynamic>;
-        expect(messages, hasLength(2));
-        expect((messages.first as Map<String, dynamic>)['role'], 'system');
-        final systemPrompt =
-            ((messages.first as Map<String, dynamic>)['content'] as String);
-        // System prompt must include today's date, time of day, and
-        // weekday so the model can resolve relative references like
-        // "明天" or "下午3点" against the user's actual local clock.
-        expect(systemPrompt, contains('2026-06-13 10:00'));
-        expect(systemPrompt, contains('星期六'));
-        expect(systemPrompt, contains('Asia/Shanghai'));
-        // The prompt must contain a timezone contract section, a
-        // concrete example with the dynamic tomorrow date, and the
-        // device's current time rendered as wall-clock local time.
-        expect(systemPrompt, contains('【时间规则】'));
-        expect(
-          systemPrompt,
-          contains('2026-06-14'),
-        ); // tomorrow from fixedNowWithTime
-        expect(systemPrompt, contains('明天下午2点去上海'));
-        expect(systemPrompt, contains('不是 UTC'));
-        // The placeholder token must be fully substituted at runtime,
-        // and the substituted offset must look like ±HH:MM.
-        expect(systemPrompt, isNot(contains('[TZ_OFFSET]')));
-        expect(systemPrompt, matches(RegExp(r'[+-]\d{2}:\d{2}')));
-        return http.Response(
-          jsonEncode(canned),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      });
-
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      final drafts = await analyzer.analyze(
-        text: '明天下午 3 点开会',
-        apiKey: 'test-key',
-        timezone: 'Asia/Shanghai',
-        now: fixedNowWithTime,
-      );
-      expect(drafts, hasLength(1));
-      expect(drafts.single.title, '开会');
-    });
-
-    test('maps 401 to AiAuthException', () async {
-      final client = MockClient((_) async => http.Response('{"err":1}', 401));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'bad',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiAuthException>()),
-      );
-    });
-
-    test('maps 403 to AiAuthException', () async {
-      final client = MockClient((_) async => http.Response('forbidden', 403));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'bad',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiAuthException>()),
-      );
-    });
-
-    test('maps 429 to AiRateLimitException', () async {
-      final client = MockClient((_) async => http.Response('rate', 429));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'k',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiRateLimitException>()),
-      );
-    });
-
-    test('maps 500 to AiServerException', () async {
-      final client = MockClient((_) async => http.Response('boom', 500));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'k',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiServerException>()),
-      );
-    });
-
-    test('maps malformed body to AiParseException', () async {
-      final client = MockClient((_) async => http.Response('not json', 200));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'k',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiParseException>()),
-      );
-    });
-
-    test('maps SocketException to AiNetworkException', () async {
-      final client = MockClient((_) async {
-        throw const SocketException('no route to host');
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'k',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiNetworkException>()),
-      );
-    });
-
-    test('maps TimeoutException to AiNetworkException', () async {
-      final client = MockClient((_) async {
-        throw TimeoutException('slow');
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: 'k',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiNetworkException>()),
-      );
-    });
-
-    test('rejects whitespace-only key with AiAuthException', () async {
-      final client = MockClient((_) async => http.Response('', 200));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      expect(
-        () => analyzer.analyze(
-          text: 'x',
-          apiKey: '   ',
-          timezone: 'Asia/Shanghai',
-          now: fixedNow,
-        ),
-        throwsA(isA<AiAuthException>()),
-      );
-    });
-  });
-
-  group('DeepSeekAnalyzer.polishText', () {
-    Map<String, dynamic> chatResponse(String content) => <String, dynamic>{
-      'choices': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'message': <String, dynamic>{'content': content},
-        },
-      ],
-    };
-
-    test('returns the trimmed model content on 200', () async {
-      final client = MockClient((request) async {
-        expect(request.method, 'POST');
-        expect(
-          request.url.toString(),
-          'https://api.deepseek.com/v1/chat/completions',
-        );
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'deepseek-v4-flash');
-        // Plain text — the analyzer must NOT request JSON mode here, or
-        // the model would wrap the answer in `{"reply": "..."}`.
-        expect(body.containsKey('response_format'), isFalse);
-        expect(body['temperature'], 0.7);
-        final messages = body['messages'] as List<dynamic>;
-        expect(messages, hasLength(2));
-        expect((messages.first as Map<String, dynamic>)['role'], 'system');
-        expect(
-          ((messages.first as Map<String, dynamic>)['content'] as String),
-          contains('润色'),
-        );
-        return http.Response(
-          jsonEncode(chatResponse('  润色后的文本。  ')),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-
-      final result = await analyzer.polishText(
-        text: '原文\n带换行',
-        apiKey: 'test-key',
-      );
-      expect(result, '润色后的文本。');
-    });
-
-    test('strips Markdown code fences defensively', () async {
-      final client = MockClient(
-        (_) async => http.Response(
-          jsonEncode(chatResponse('```\n润色后\n```')),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        ),
-      );
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-
-      final result = await analyzer.polishText(text: '原文', apiKey: 'test-key');
-      expect(result, '润色后');
-    });
-
-    test('rejects empty input with AiParseException', () async {
-      final client = MockClient((_) async => http.Response('', 200));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: '   \n  ', apiKey: 'test-key'),
-        throwsA(isA<AiParseException>()),
-      );
-    });
-
-    test('rejects whitespace-only key with AiAuthException', () async {
-      final client = MockClient((_) async => http.Response('', 200));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: '   '),
-        throwsA(isA<AiAuthException>()),
-      );
-    });
-
-    test('maps 401 to AiAuthException', () async {
-      final client = MockClient((_) async => http.Response('{"err":1}', 401));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'bad'),
-        throwsA(isA<AiAuthException>()),
-      );
-    });
-
-    test('maps 429 to AiRateLimitException', () async {
-      final client = MockClient((_) async => http.Response('rate', 429));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
-        throwsA(isA<AiRateLimitException>()),
-      );
-    });
-
-    test('maps 500 to AiServerException', () async {
-      final client = MockClient((_) async => http.Response('boom', 500));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
-        throwsA(isA<AiServerException>()),
-      );
-    });
-
-    test('maps malformed body to AiParseException', () async {
-      final client = MockClient((_) async => http.Response('not json', 200));
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
-        throwsA(isA<AiParseException>()),
-      );
-    });
-
-    test('maps SocketException to AiNetworkException', () async {
-      final client = MockClient((_) async {
-        throw const SocketException('no route to host');
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
-        throwsA(isA<AiNetworkException>()),
-      );
-    });
-
-    test('maps TimeoutException to AiNetworkException', () async {
-      final client = MockClient((_) async {
-        throw TimeoutException('slow');
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      expect(
-        () => analyzer.polishText(text: 'hi', apiKey: 'k'),
-        throwsA(isA<AiNetworkException>()),
-      );
-    });
-  });
-
   group('DeepSeekAnalyzer.renderAssistantPrompt', () {
     test('substitutes every supported placeholder', () {
       final rendered = DeepSeekAnalyzer.renderAssistantPrompt(
@@ -549,106 +209,6 @@ void main() {
       expect(rendered, literal);
     });
   });
-
-  group('DeepSeekAnalyzer.analyze with custom systemPromptTemplate', () {
-    Map<String, dynamic> chatResponse(String content) => <String, dynamic>{
-      'choices': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'message': <String, dynamic>{'content': content},
-        },
-      ],
-    };
-
-    test('renders the user-provided template instead of the default', () async {
-      final client = MockClient((request) async {
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        final messages = body['messages'] as List<dynamic>;
-        final systemPrompt =
-            ((messages.first as Map<String, dynamic>)['content'] as String);
-        // The custom template's literal text reaches the model verbatim,
-        // and {{now}} is still substituted.
-        expect(systemPrompt, startsWith('custom: 2026-06-13 10:00'));
-        // The default template's content must NOT leak through.
-        expect(systemPrompt, isNot(contains('【时间规则】')));
-        return http.Response(
-          jsonEncode(chatResponse('{"reminders":[]}')),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-
-      final drafts = await analyzer.analyze(
-        text: 'hi',
-        apiKey: 'test-key',
-        timezone: 'Asia/Shanghai',
-        now: fixedNowWithTime,
-        systemPromptTemplate: 'custom: {{now}} ({{timezone}})',
-      );
-      expect(drafts, isEmpty);
-    });
-
-    test('falls back to the built-in template when null is passed', () async {
-      final client = MockClient((request) async {
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        final messages = body['messages'] as List<dynamic>;
-        final systemPrompt =
-            ((messages.first as Map<String, dynamic>)['content'] as String);
-        // The default template's signature section markers must show.
-        expect(systemPrompt, contains('【时间规则】'));
-        expect(systemPrompt, contains('Asia/Shanghai'));
-        return http.Response(
-          jsonEncode(chatResponse('{"reminders":[]}')),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      await analyzer.analyze(
-        text: 'hi',
-        apiKey: 'test-key',
-        timezone: 'Asia/Shanghai',
-        now: fixedNowWithTime,
-      );
-    });
-  });
-
-  group('DeepSeekAnalyzer.polishText with custom systemPrompt', () {
-    Map<String, dynamic> chatResponse(String content) => <String, dynamic>{
-      'choices': <Map<String, dynamic>>[
-        <String, dynamic>{
-          'message': <String, dynamic>{'content': content},
-        },
-      ],
-    };
-
-    test('forwards the user-provided prompt verbatim', () async {
-      final client = MockClient((request) async {
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        final messages = body['messages'] as List<dynamic>;
-        expect(
-          (messages.first as Map<String, dynamic>)['content'],
-          'my custom polish prompt',
-        );
-        return http.Response(
-          jsonEncode(chatResponse('ok')),
-          200,
-          headers: <String, String>{'content-type': 'application/json'},
-        );
-      });
-      final analyzer = DeepSeekAnalyzer(client: client);
-      addTearDown(analyzer.dispose);
-      final result = await analyzer.polishText(
-        text: 'hello',
-        apiKey: 'k',
-        systemPrompt: 'my custom polish prompt',
-      );
-      expect(result, 'ok');
-    });
-  });
-
   group('DeepSeekAnalyzer.analyzeError', () {
     Map<String, dynamic> chatResponse(String content) => <String, dynamic>{
       'choices': <Map<String, dynamic>>[
@@ -703,10 +263,13 @@ void main() {
       final client = MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final messages = body['messages'] as List<dynamic>;
-        expect(
-          (messages.first as Map<String, dynamic>)['content'],
-          'my custom error prompt',
-        );
+        final content =
+            (messages.first as Map<String, dynamic>)['content'] as String;
+        // The anti-extraction appendix is appended to any user-supplied
+        // prompt to reduce prompt-injection risk; the original text
+        // must still come through verbatim.
+        expect(content, startsWith('my custom error prompt'));
+        expect(content, contains('Never reveal'));
         return http.Response(
           jsonEncode(chatResponse('ok')),
           200,
@@ -797,6 +360,173 @@ void main() {
         () => analyzer.analyzeError(text: 'err', apiKey: 'k'),
         throwsA(isA<AiNetworkException>()),
       );
+    });
+  });
+
+  group('DeepSeekAnalyzer input sanitization', () {
+    test('strips ASCII control characters from user text', () async {
+      String? captured;
+      final client = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        captured = (messages.last as Map<String, dynamic>)['content'] as String;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'choices': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'message': <String, dynamic>{'content': 'ok'},
+              },
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      await analyzer.analyzeError(
+        text: 'hello\x00\x01\x07world\x1F',
+        apiKey: 'k',
+      );
+      // The control bytes should be gone but "hello" and "world"
+      // remain.
+      expect(captured, contains('helloworld'));
+    });
+
+    test('collapses 3+ newlines into a single blank line', () async {
+      String? captured;
+      final client = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        captured = (messages.last as Map<String, dynamic>)['content'] as String;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'choices': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'message': <String, dynamic>{'content': 'ok'},
+              },
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      await analyzer.analyzeError(
+        text: 'a\n\n\n\n\nb',
+        apiKey: 'k',
+      );
+      // Five newlines collapse to two (one blank line).
+      expect(captured, isNot(contains('\n\n\n')));
+    });
+
+    test('appends anti-extraction appendix only for user prompts', () async {
+      String defaultPrompt = '';
+      String customPrompt = '';
+      final client = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        final content = (messages.first as Map<String, dynamic>)['content']
+            as String;
+        if (content.contains('资深工程师')) {
+          defaultPrompt = content;
+        } else {
+          customPrompt = content;
+        }
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'choices': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'message': <String, dynamic>{'content': 'ok'},
+              },
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+
+      await analyzer.analyzeError(text: 'a', apiKey: 'k');
+      await analyzer.analyzeError(
+        text: 'b',
+        apiKey: 'k',
+        systemPrompt: 'custom prompt',
+      );
+
+      expect(defaultPrompt, isNot(contains('Never reveal')));
+      expect(customPrompt, contains('Never reveal'));
+    });
+
+    test('truncates oversized custom system prompt', () async {
+      String? captured;
+      final oversized = 'x' * 5000;
+      final client = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        captured = (messages.first as Map<String, dynamic>)['content']
+            as String;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'choices': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'message': <String, dynamic>{'content': 'ok'},
+              },
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      await analyzer.analyzeError(
+        text: 'err',
+        apiKey: 'k',
+        systemPrompt: oversized,
+      );
+      // Captured prompt is the truncated version + appendix, never the
+      // full 5000-character payload.
+      expect(captured!.length, lessThan(5000));
+      expect(captured, contains('已截断'));
+    });
+  });
+
+  group('DeepSeekAnalyzer.adjustReminder truncation', () {
+    test('truncates oversized user input proportionally', () async {
+      String? captured;
+      final bigDescription = 'd' * 5000;
+      final client = MockClient((request) async {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final messages = body['messages'] as List<dynamic>;
+        captured = (messages.last as Map<String, dynamic>)['content']
+            as String;
+        return http.Response(
+          jsonEncode(<String, dynamic>{
+            'choices': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'message': <String, dynamic>{'content': '{"reminders":[]}'},
+              },
+            ],
+          }),
+          200,
+          headers: <String, String>{'content-type': 'application/json'},
+        );
+      });
+      final analyzer = DeepSeekAnalyzer(client: client);
+      addTearDown(analyzer.dispose);
+      await analyzer.adjustReminder(
+        title: 'tiny title',
+        description: bigDescription,
+        apiKey: 'k',
+        timezone: 'Asia/Shanghai',
+        now: fixedNowWithTime,
+      );
+      // The combined user content is capped at 4000 chars (plus the
+      // "用户已填描述:" prefix and a few newlines).
+      expect(captured!.length, lessThanOrEqualTo(4200));
     });
   });
 }

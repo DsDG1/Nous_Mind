@@ -38,6 +38,11 @@ class AiSettingsPage extends StatelessWidget {
               child: _DeepSeekProviderCard(),
             ),
             SizedBox(height: 12),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: _AiUsageCard(),
+            ),
+            SizedBox(height: 12),
             _PromptsSection(),
           ],
         ),
@@ -57,9 +62,8 @@ class _PromptsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsViewModel>().settings;
     final customCount = <bool>[
-      settings.aiAssistantPrompt != null,
-      settings.aiPolishPrompt != null,
       settings.aiErrorAnalysisPrompt != null,
+      settings.aiAdjustPrompt != null,
     ].where((c) => c).length;
     return SettingsSection(
       title: '提示词',
@@ -68,7 +72,7 @@ class _PromptsSection extends StatelessWidget {
         SettingsTile(
           leading: const Icon(Icons.tune_outlined),
           title: '自定义 prompt',
-          subtitle: customCount == 0 ? '全部使用默认' : '已自定义 $customCount / 3',
+          subtitle: customCount == 0 ? '全部使用默认' : '已自定义 $customCount / 2',
           onTap: () => context.push('/settings/ai/prompts'),
         ),
       ],
@@ -300,5 +304,154 @@ class _LocalOcrCard extends StatelessWidget {
       OcrModuleStatus.unsupported => '已启用 · 当前设备不支持中文模型',
       OcrModuleStatus.unknown => '已启用 · 检查模型状态…',
     };
+  }
+}
+
+/// Surfaces the daily-call counter that backs [AiUsageGuard]. Lets the
+/// user toggle the per-day ceiling on or off from one place; when the
+/// switch is on, the current usage reads as "X / Y" and the limit is
+/// editable through the existing dialog. When the switch is off, the
+/// card surfaces "今日不限制" and hides the edit affordance, while the
+/// in-process cooldown and the analyzer-level sanitization remain.
+class _AiUsageCard extends StatelessWidget {
+  const _AiUsageCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<SettingsViewModel>();
+    final settings = vm.settings;
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final used = settings.aiCallsToday;
+    final limit = settings.aiDailyLimit;
+    final quotaOn = settings.aiDailyLimitEnabled;
+
+    return Card(
+      elevation: 0,
+      color: colors.surfaceContainerHighest,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.bar_chart_outlined, color: colors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('今日 AI 用量', style: textTheme.titleMedium),
+                ),
+                Text(
+                  quotaOn ? '$used / $limit' : '今日不限制',
+                  style: textTheme.titleMedium?.copyWith(
+                    color: quotaOn && used >= limit
+                        ? colors.error
+                        : colors.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('启用每日限额'),
+              subtitle: Text(
+                quotaOn
+                    ? '开启后按每日上限拦截 AI 调用'
+                    : '关闭后今日不限制调用次数（仅保留冷却）',
+              ),
+              value: quotaOn,
+              onChanged: (value) => vm.setAiDailyLimitEnabled(value),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('每日上限'),
+              trailing: quotaOn
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text('$limit 次/天'),
+                        TextButton(
+                          onPressed: () =>
+                              _showDailyLimitDialog(context, vm, limit),
+                          child: const Text('修改上限'),
+                        ),
+                      ],
+                    )
+                  : null,
+              subtitle: quotaOn
+                  ? null
+                  : const Text('已关闭 — 今日不设上限'),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await vm.resetAiUsage();
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context)
+                        ..hideCurrentSnackBar()
+                        ..showSnackBar(
+                          const SnackBar(content: Text('今日用量已重置')),
+                        );
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('重置今日用量'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDailyLimitDialog(
+    BuildContext context,
+    SettingsViewModel vm,
+    int currentLimit,
+  ) async {
+    final controller = TextEditingController(text: currentLimit.toString());
+    final result = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('每日 AI 调用上限'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: '次数 (1-999)',
+              helperText: '留空或填 0 视为放弃修改',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed = int.tryParse(controller.text.trim());
+                if (parsed == null || parsed < 1 || parsed > 999) {
+                  Navigator.of(dialogContext).pop();
+                  return;
+                }
+                Navigator.of(dialogContext).pop(parsed);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        );
+      },
+    );
+    if (result == null) return;
+    await vm.setAiDailyLimit(result);
   }
 }

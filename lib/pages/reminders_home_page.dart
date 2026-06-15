@@ -3,9 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../models/reminder.dart';
+import '../services/app_settings_bridge.dart';
 import '../services/calendar_service.dart';
 import '../viewmodels/reminders_view_model.dart';
-import '../widgets/create_reminder_sheet.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/reminder_list_item.dart';
 
@@ -21,6 +21,7 @@ class RemindersHomePage extends StatefulWidget {
 class _RemindersHomePageState extends State<RemindersHomePage> {
   final GlobalKey _fabKey = GlobalKey();
   final CalendarService _calendar = CalendarService();
+  final AppSettingsBridge _appSettings = AppSettingsBridge();
 
   Future<void> _openEditor(BuildContext context, Reminder? existing) async {
     final fabRenderBox =
@@ -33,15 +34,11 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     await context.push('/editor', extra: (existing, fabPosition));
   }
 
-  Future<void> _openCreateChooser(BuildContext context) async {
-    final fabRenderBox =
-        _fabKey.currentContext?.findRenderObject() as RenderBox?;
-    final fabPosition = fabRenderBox != null
-        ? fabRenderBox.localToGlobal(
-            Offset(fabRenderBox.size.width / 2, fabRenderBox.size.height / 2),
-          )
-        : Offset.zero;
-    await CreateReminderSheet.show(context, fabPosition: fabPosition);
+  Future<void> _openEditorFromItem(
+    BuildContext context,
+    Reminder existing,
+  ) async {
+    await context.push('/editor', extra: (existing, null as Offset?));
   }
 
   Future<void> _deleteWithFeedback(
@@ -69,15 +66,33 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     final messenger = ScaffoldMessenger.of(context);
     final granted = await _calendar.requestPermissions();
     if (!granted) {
+      if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('未授予日历写入权限')));
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('未授予日历写入权限'),
+            action: SnackBarAction(
+              label: '去设置',
+              onPressed: _appSettings.openAppSettings,
+            ),
+          ),
+        );
       return;
     }
-    final ok = await _calendar.addReminder(reminder);
+    final result = await _calendar.addReminder(reminder);
+    if (!mounted) return;
+    final message = switch (result) {
+      CalendarAddResult.success => '已加入日历',
+      CalendarAddResult.noCalendars =>
+        '设备上没有日历账户，请先添加一个日历账户',
+      CalendarAddResult.noWritableCalendar =>
+        '没有可写入的日历，请检查日历权限',
+      CalendarAddResult.writeFailed => '写入日历失败，请稍后重试',
+    };
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(ok ? '已加入日历' : '已取消')));
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -104,7 +119,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
               final reminder = items[index];
               return ReminderListItem(
                 reminder: reminder,
-                onTap: () => _openEditor(context, reminder),
+                onTap: () => _openEditorFromItem(context, reminder),
                 onDelete: () =>
                     _deleteWithFeedback(context, viewModel, reminder),
                 onAddToCalendar: () => _addToCalendarWithFeedback(reminder),
@@ -116,7 +131,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       floatingActionButton: FloatingActionButton(
         key: _fabKey,
         heroTag: 'reminders-fab',
-        onPressed: () => _openCreateChooser(context),
+        onPressed: () => _openEditor(context, null),
         tooltip: '添加提醒',
         child: const Icon(Icons.add),
       ),

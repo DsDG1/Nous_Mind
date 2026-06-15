@@ -24,11 +24,13 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val CHANNEL = "quick_settings_tile"
+        private const val APP_SETTINGS_CHANNEL = "app_settings"
         const val EXTRA_OPEN_QUICK_ADD = "OPEN_QUICK_ADD"
     }
 
     private var tileChannel: MethodChannel? = null
     private var ocrChannel: MethodChannel? = null
+    private var appSettingsChannel: MethodChannel? = null
 
     /**
      * Set when a tile click arrived while Dart was not yet listening.
@@ -65,6 +67,7 @@ class MainActivity : FlutterActivity() {
         }
 
         registerChineseOcrChannels(flutterEngine)
+        registerAppSettingsChannel(flutterEngine)
 
         // The current intent (set in onCreate or by onNewIntent) may
         // already be carrying a quick-add request. Drain it now so a
@@ -104,11 +107,55 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /**
+     * Wires the `app_settings` MethodChannel used by
+     * `lib/services/app_settings_bridge.dart`.
+     *
+     * Lets Dart jump straight to the OS app-details screen so users who
+     * previously denied the calendar permission can re-enable it
+     * without hunting through system Settings. Mirrors the existing
+     * `chinese_ocr_module` and `quick_settings_tile` channels.
+     */
+    private fun registerAppSettingsChannel(flutterEngine: FlutterEngine) {
+        val channel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            APP_SETTINGS_CHANNEL,
+        )
+        appSettingsChannel = channel
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openAppSettings" -> {
+                    val launched = try {
+                        val intent = Intent(
+                            android.provider.Settings
+                                .ACTION_APPLICATION_DETAILS_SETTINGS,
+                        ).apply {
+                            data = android.net.Uri.fromParts(
+                                "package",
+                                packageName,
+                                null,
+                            )
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        true
+                    } catch (error: Exception) {
+                        false
+                    }
+                    result.success(launched)
+                }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
     override fun onDestroy() {
         ocrChannel?.setMethodCallHandler(null)
         ocrChannel = null
         tileChannel?.setMethodCallHandler(null)
         tileChannel = null
+        appSettingsChannel?.setMethodCallHandler(null)
+        appSettingsChannel = null
         super.onDestroy()
     }
 

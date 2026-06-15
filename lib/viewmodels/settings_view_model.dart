@@ -70,29 +70,6 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> setChineseOcrEnabled(bool value) =>
       _update(_settings.copyWith(chineseOcrEnabled: value));
 
-  /// Persists the user's custom prompt template for the AI assistant's
-  /// reminder-extraction flow. `null` or whitespace clears the field,
-  /// which makes [DeepSeekAnalyzer] fall back to its built-in default
-  /// (`defaultAssistantPromptTemplate`).
-  Future<void> setAiAssistantPrompt(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return _update(_settings.copyWith(clearAiAssistantPrompt: true));
-    }
-    return _update(_settings.copyWith(aiAssistantPrompt: trimmed));
-  }
-
-  /// Persists the user's custom system prompt for the "AI 一键润色"
-  /// flow. `null` or whitespace clears the field, restoring the
-  /// built-in default (`DeepSeekAnalyzer.defaultPolishPrompt`).
-  Future<void> setAiPolishPrompt(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return _update(_settings.copyWith(clearAiPolishPrompt: true));
-    }
-    return _update(_settings.copyWith(aiPolishPrompt: trimmed));
-  }
-
   /// Persists the user's custom system prompt for the "错误日志 → AI
   /// 分析" flow. `null` or whitespace clears the field, restoring the
   /// built-in default (`DeepSeekAnalyzer.defaultErrorAnalysisPrompt`).
@@ -102,5 +79,91 @@ class SettingsViewModel extends ChangeNotifier {
       return _update(_settings.copyWith(clearAiErrorAnalysisPrompt: true));
     }
     return _update(_settings.copyWith(aiErrorAnalysisPrompt: trimmed));
+  }
+
+  /// Persists the user's custom system prompt template for the "AI
+  /// 自动调整" flow in the reminder editor. `null` or whitespace
+  /// clears the field, restoring the built-in default
+  /// (`DeepSeekAnalyzer.defaultAdjustPromptTemplate`).
+  Future<void> setAiAdjustPrompt(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _update(_settings.copyWith(clearAiAdjustPrompt: true));
+    }
+    return _update(_settings.copyWith(aiAdjustPrompt: trimmed));
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI usage-quota fields. The guard ([AiUsageGuard]) calls these to keep
+  // its counters in sync with persisted state. The day-rollover logic lives
+  // here, not in the guard, because the guard does not own the clock
+  // boundary — the settings model does.
+  // ---------------------------------------------------------------------------
+
+  /// User-configurable hard ceiling on AI calls per local-day. Mirrors
+  /// the input field on the AI settings page.
+  Future<void> setAiDailyLimit(int value) =>
+      _update(_settings.copyWith(aiDailyLimit: value));
+
+  /// User-facing master switch for the daily-quota check. Defaults to
+  /// `true`; when `false`, [AiUsageGuard] skips the ceiling check
+  /// entirely while still enforcing the in-process cooldown.
+  Future<void> setAiDailyLimitEnabled(bool value) =>
+      _update(_settings.copyWith(aiDailyLimitEnabled: value));
+
+  /// Returns the today's call count, rolling over to 0 when the
+  /// current local-day differs from [aiCallsResetAt]. Read-only; the
+  /// guard calls this rather than touching the field directly so the
+  /// same rollover rule applies everywhere.
+  int get aiCallsTodayRollover {
+    final resetAt = _settings.aiCallsResetAt;
+    if (resetAt == null) return _settings.aiCallsToday;
+    if (_isSameLocalDay(resetAt, DateTime.now())) {
+      return _settings.aiCallsToday;
+    }
+    return 0;
+  }
+
+  int get aiDailyLimit => _settings.aiDailyLimit;
+  bool get aiDailyLimitEnabled => _settings.aiDailyLimitEnabled;
+  int get aiCallsToday => aiCallsTodayRollover;
+
+  int get aiCallsRemainingToday {
+    final remaining = aiDailyLimit - aiCallsToday;
+    return remaining < 0 ? 0 : remaining;
+  }
+
+  /// Bumps the in-memory counter after a successful AI call and
+  /// persists the new value. If the persisted reset timestamp is from
+  /// a previous local-day (or null) the counter resets to 1 instead
+  /// of incrementing, so day boundaries never accumulate stale
+  /// counts.
+  Future<void> incrementAiCallsToday() {
+    final now = DateTime.now();
+    final current = _settings.aiCallsResetAt;
+    final isNewDay = current == null || !_isSameLocalDay(current, now);
+    final next = isNewDay ? 1 : _settings.aiCallsToday + 1;
+    return _update(
+      _settings.copyWith(
+        aiCallsToday: next,
+        aiCallsResetAt: now,
+      ),
+    );
+  }
+
+  /// User-facing "clear today's usage" action exposed from the AI
+  /// settings page. Drops the counter to 0 and clears the reset
+  /// timestamp so the next call starts a fresh window.
+  Future<void> resetAiUsage() {
+    return _update(
+      _settings.copyWith(
+        aiCallsToday: 0,
+        clearAiCallsResetAt: true,
+      ),
+    );
+  }
+
+  static bool _isSameLocalDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }

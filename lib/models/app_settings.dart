@@ -144,10 +144,18 @@ class AppSettings {
     this.aiAssistantEnabled = false,
     this.aiApiKey,
     this.chineseOcrEnabled = true,
-    this.aiAssistantPrompt,
-    this.aiPolishPrompt,
     this.aiErrorAnalysisPrompt,
+    this.aiAdjustPrompt,
+    this.aiDailyLimit = _defaultAiDailyLimit,
+    this.aiDailyLimitEnabled = true,
+    this.aiCallsToday = 0,
+    this.aiCallsResetAt,
   });
+
+  /// Default ceiling on AI calls per local-day. The guard refuses new
+  /// calls once `aiCallsToday` reaches this number; the user can lower
+  /// or raise it from the AI settings page.
+  static const int _defaultAiDailyLimit = 50;
 
   final ThemeMode themeMode;
   final AppSeedColor seedColor;
@@ -183,23 +191,44 @@ class AppSettings {
   /// the Chinese model is missing or fails.
   final bool chineseOcrEnabled;
 
-  /// User-customized system prompt template for the AI assistant's
-  /// reminder-extraction flow. `null` (the default) means use the
-  /// built-in template (`DeepSeekAnalyzer.defaultAssistantPromptTemplate`).
-  /// The template may contain the placeholders `{{now}}`, `{{timezone}}`,
-  /// `{{offset}}`, `{{weekday}}`, `{{tomorrow}}` which are substituted
-  /// per request.
-  final String? aiAssistantPrompt;
-
-  /// User-customized system prompt for the "AI 一键润色" flow. `null`
-  /// means use `DeepSeekAnalyzer.defaultPolishPrompt`. No template
-  /// variables — sent verbatim.
-  final String? aiPolishPrompt;
-
   /// User-customized system prompt for the "错误日志 → AI 分析" flow.
   /// `null` means use `DeepSeekAnalyzer.defaultErrorAnalysisPrompt`.
   /// No template variables — sent verbatim.
   final String? aiErrorAnalysisPrompt;
+
+  /// User-customized system prompt template for the "AI 自动调整"
+  /// flow in the reminder editor. `null` means use the built-in
+  /// template (`DeepSeekAnalyzer.defaultAdjustPromptTemplate`).
+  /// Supports the same `{{now}}`, `{{timezone}}`, `{{offset}}`,
+  /// `{{weekday}}` placeholders as [aiAssistantPrompt].
+  final String? aiAdjustPrompt;
+
+  /// Hard ceiling on AI calls per local-day. Used by [AiUsageGuard] to
+  /// refuse new calls once [aiCallsToday] reaches this value. The user
+  /// can adjust it from the AI settings page; anything outside the
+  /// 1..999 range is clamped on write so the guard can never block
+  /// permanently on a typo.
+  final int aiDailyLimit;
+
+  /// Whether [aiDailyLimit] is actually enforced. Defaults to `true`
+  /// for new installs and old rows that pre-date the switch (the
+  /// `fromJson` reader fills in `true` when the key is absent). When
+  /// `false`, [AiUsageGuard] skips the ceiling check entirely — the
+  /// in-process cooldown and the analyzer-level input sanitization
+  /// still apply, but no call count is refused on quota grounds.
+  final bool aiDailyLimitEnabled;
+
+  /// Number of successful AI calls counted in the current local-day
+  /// window (defined by [aiCallsResetAt]). Reset to 0 by
+  /// [SettingsViewModel.incrementAiCallsToday] when the date rolls
+  /// over.
+  final int aiCallsToday;
+
+  /// Wall-clock instant the daily counter was last (re)initialised.
+  /// `null` means "no calls have been recorded yet", which the guard
+  /// treats as a cold-start that initialises the counter to 1 on the
+  /// first success.
+  final DateTime? aiCallsResetAt;
 
   AppSettings copyWith({
     ThemeMode? themeMode,
@@ -212,12 +241,15 @@ class AppSettings {
     bool? aiAssistantEnabled,
     String? aiApiKey,
     bool? chineseOcrEnabled,
-    String? aiAssistantPrompt,
-    bool clearAiAssistantPrompt = false,
-    String? aiPolishPrompt,
-    bool clearAiPolishPrompt = false,
     String? aiErrorAnalysisPrompt,
     bool clearAiErrorAnalysisPrompt = false,
+    String? aiAdjustPrompt,
+    bool clearAiAdjustPrompt = false,
+    int? aiDailyLimit,
+    bool? aiDailyLimitEnabled,
+    int? aiCallsToday,
+    DateTime? aiCallsResetAt,
+    bool clearAiCallsResetAt = false,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -230,15 +262,18 @@ class AppSettings {
       aiAssistantEnabled: aiAssistantEnabled ?? this.aiAssistantEnabled,
       aiApiKey: aiApiKey ?? this.aiApiKey,
       chineseOcrEnabled: chineseOcrEnabled ?? this.chineseOcrEnabled,
-      aiAssistantPrompt: clearAiAssistantPrompt
-          ? null
-          : (aiAssistantPrompt ?? this.aiAssistantPrompt),
-      aiPolishPrompt: clearAiPolishPrompt
-          ? null
-          : (aiPolishPrompt ?? this.aiPolishPrompt),
       aiErrorAnalysisPrompt: clearAiErrorAnalysisPrompt
           ? null
           : (aiErrorAnalysisPrompt ?? this.aiErrorAnalysisPrompt),
+      aiAdjustPrompt: clearAiAdjustPrompt
+          ? null
+          : (aiAdjustPrompt ?? this.aiAdjustPrompt),
+      aiDailyLimit: _normalizeDailyLimit(aiDailyLimit ?? this.aiDailyLimit),
+      aiDailyLimitEnabled: aiDailyLimitEnabled ?? this.aiDailyLimitEnabled,
+      aiCallsToday: aiCallsToday ?? this.aiCallsToday,
+      aiCallsResetAt: clearAiCallsResetAt
+          ? null
+          : (aiCallsResetAt ?? this.aiCallsResetAt),
     );
   }
 
@@ -253,10 +288,14 @@ class AppSettings {
     'ai_assistant_enabled': aiAssistantEnabled,
     if (aiApiKey != null) 'ai_api_key': aiApiKey,
     'chinese_ocr_enabled': chineseOcrEnabled,
-    if (aiAssistantPrompt != null) 'ai_assistant_prompt': aiAssistantPrompt,
-    if (aiPolishPrompt != null) 'ai_polish_prompt': aiPolishPrompt,
     if (aiErrorAnalysisPrompt != null)
       'ai_error_analysis_prompt': aiErrorAnalysisPrompt,
+    if (aiAdjustPrompt != null) 'ai_adjust_prompt': aiAdjustPrompt,
+    'ai_daily_limit': aiDailyLimit,
+    'ai_daily_limit_enabled': aiDailyLimitEnabled,
+    'ai_calls_today': aiCallsToday,
+    if (aiCallsResetAt != null)
+      'ai_calls_reset_at': aiCallsResetAt!.toIso8601String(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -297,11 +336,14 @@ class AppSettings {
       aiAssistantEnabled: (json['ai_assistant_enabled'] as bool?) ?? false,
       aiApiKey: _normalizeOptionalString(json['ai_api_key']),
       chineseOcrEnabled: (json['chinese_ocr_enabled'] as bool?) ?? true,
-      aiAssistantPrompt: _normalizeOptionalString(json['ai_assistant_prompt']),
-      aiPolishPrompt: _normalizeOptionalString(json['ai_polish_prompt']),
       aiErrorAnalysisPrompt: _normalizeOptionalString(
         json['ai_error_analysis_prompt'],
       ),
+      aiAdjustPrompt: _normalizeOptionalString(json['ai_adjust_prompt']),
+      aiDailyLimit: _normalizeDailyLimit((json['ai_daily_limit'] as int?) ?? _defaultAiDailyLimit),
+      aiDailyLimitEnabled: (json['ai_daily_limit_enabled'] as bool?) ?? true,
+      aiCallsToday: _normalizeCallsToday(json['ai_calls_today']),
+      aiCallsResetAt: _parseResetAt(json['ai_calls_reset_at']),
     );
   }
 
@@ -309,6 +351,25 @@ class AppSettings {
     if (value is! String) return null;
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// Clamps the user-configurable daily limit into a sane range so a
+  /// hand-edited sqflite row can never wedge the guard.
+  static int _normalizeDailyLimit(int value) {
+    if (value < 1) return 1;
+    if (value > 999) return 999;
+    return value;
+  }
+
+  static int _normalizeCallsToday(Object? value) {
+    if (value is! int) return 0;
+    if (value < 0) return 0;
+    return value;
+  }
+
+  static DateTime? _parseResetAt(Object? value) {
+    if (value is! String) return null;
+    return DateTime.tryParse(value);
   }
 }
 
