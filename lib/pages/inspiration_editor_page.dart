@@ -5,10 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../models/inspiration.dart';
-import '../services/inspiration_image_store.dart';
-import '../viewmodels/inspirations_view_model.dart';
-import '../widgets/image_preview.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/viewmodels/inspirations_view_model.dart';
+import 'package:nousmind/widgets/image_preview.dart';
 
 /// Outcome of attempting to pick an image, used internally by the editor.
 enum _PickOutcome { selected, cancelled, failed }

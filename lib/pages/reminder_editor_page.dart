@@ -8,14 +8,14 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../models/reminder.dart';
-import '../models/reminder_draft.dart';
-import '../services/ai_analyzer.dart';
-import '../services/ai_usage_guard.dart';
-import '../services/inspiration_image_store.dart';
-import '../viewmodels/reminders_view_model.dart';
-import '../viewmodels/settings_view_model.dart';
-import '../widgets/image_preview.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/models/reminder_draft.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/services/ai_usage_guard.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/image_preview.dart';
 
 /// Page used for both creating a new reminder and editing an existing one.
 ///
@@ -166,9 +166,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
-            content: Text(
-              'AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试',
-            ),
+            content: Text('AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试'),
           ),
         );
       return;
@@ -235,11 +233,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(error.message)));
     } on Exception catch (error, stackTrace) {
-      developer.log(
-        'AI adjust failed',
-        error: error,
-        stackTrace: stackTrace,
-      );
+      developer.log('AI adjust failed', error: error, stackTrace: stackTrace);
       if (!mounted) return;
       messenger
         ..hideCurrentSnackBar()
@@ -307,9 +301,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     );
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text('已添加 ${selectedDrafts.length} 项')),
-      );
+      ..showSnackBar(SnackBar(content: Text('已添加 ${selectedDrafts.length} 项')));
     if (mounted) context.pop();
   }
 
@@ -592,7 +584,8 @@ class _BatchConfirmSheetState extends State<_BatchConfirmSheet> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => _toggleAll(_selectedCount < widget.drafts.length),
+                    onPressed: () =>
+                        _toggleAll(_selectedCount < widget.drafts.length),
                     child: Text(
                       _selectedCount == widget.drafts.length ? '全部取消' : '全选',
                     ),
@@ -609,7 +602,8 @@ class _BatchConfirmSheetState extends State<_BatchConfirmSheet> {
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 itemCount: widget.drafts.length,
-                separatorBuilder: (_, _) => const Divider(height: 1, indent: 56),
+                separatorBuilder: (_, _) =>
+                    const Divider(height: 1, indent: 56),
                 itemBuilder: (context, index) {
                   final draft = widget.drafts[index];
                   return _DraftTile(

@@ -12,7 +12,7 @@ import 'package:flutter/services.dart';
 /// system prompt).
 class AppSettingsBridge {
   AppSettingsBridge({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('app_settings');
+    : _channel = channel ?? const MethodChannel('app_settings');
 
   final MethodChannel _channel;
 

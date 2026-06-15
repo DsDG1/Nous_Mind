@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 
-import '../models/inspiration.dart';
-import '../services/inspiration_image_store.dart';
-import '../services/inspiration_repository.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/inspiration_repository.dart';
 
 /// Holds the in-memory list of inspirations and persists every change.
 ///

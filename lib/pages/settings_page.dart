@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../models/app_settings.dart';
-import '../viewmodels/settings_view_model.dart';
-import '../widgets/settings_section.dart';
-import '../widgets/settings_stats_card.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
+import 'package:nousmind/widgets/settings_stats_card.dart';
 
 /// Home of the settings tab. Renders a grouped list with one tile per
 /// settings subpage plus a high-level summary that mirrors the current

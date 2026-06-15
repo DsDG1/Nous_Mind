@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../services/ai_analyzer.dart';
-import '../services/ai_usage_guard.dart';
-import '../services/error_log_service.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/services/ai_usage_guard.dart';
+import 'package:nousmind/services/error_log_service.dart';
 
 /// Modal bottom sheet that runs [AiAnalyzer.analyzeError] against an
 /// [ErrorLogEntry] and renders the AI's diagnosis. Modeled after

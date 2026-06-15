@@ -340,7 +340,9 @@ class AppSettings {
         json['ai_error_analysis_prompt'],
       ),
       aiAdjustPrompt: _normalizeOptionalString(json['ai_adjust_prompt']),
-      aiDailyLimit: _normalizeDailyLimit((json['ai_daily_limit'] as int?) ?? _defaultAiDailyLimit),
+      aiDailyLimit: _normalizeDailyLimit(
+        (json['ai_daily_limit'] as int?) ?? _defaultAiDailyLimit,
+      ),
       aiDailyLimitEnabled: (json['ai_daily_limit_enabled'] as bool?) ?? true,
       aiCallsToday: _normalizeCallsToday(json['ai_calls_today']),
       aiCallsResetAt: _parseResetAt(json['ai_calls_reset_at']),

@@ -6,8 +6,8 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../models/app_settings.dart';
-import '../models/reminder.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/models/reminder.dart';
 
 /// Wraps [FlutterLocalNotificationsPlugin] with reminder-specific helpers.
 ///

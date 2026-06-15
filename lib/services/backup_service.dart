@@ -6,12 +6,12 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../models/inspiration.dart';
-import '../models/reminder.dart';
-import 'inspiration_image_store.dart';
-import 'inspiration_repository.dart';
-import 'reminder_repository.dart';
-import 'settings_repository.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/inspiration_repository.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/services/settings_repository.dart';
 
 /// Snapshot of the user's data for display on the data management subpage
 /// and the settings home stats card.

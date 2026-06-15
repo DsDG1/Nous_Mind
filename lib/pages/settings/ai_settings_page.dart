@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/chinese_ocr_installer.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/services/chinese_ocr_installer.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage that lists the configured AI assistant providers.
 /// Each provider renders as a tappable card with an inline enable
@@ -339,9 +339,7 @@ class _AiUsageCard extends StatelessWidget {
               children: <Widget>[
                 Icon(Icons.bar_chart_outlined, color: colors.primary),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: Text('今日 AI 用量', style: textTheme.titleMedium),
-                ),
+                Expanded(child: Text('今日 AI 用量', style: textTheme.titleMedium)),
                 Text(
                   quotaOn ? '$used / $limit' : '今日不限制',
                   style: textTheme.titleMedium?.copyWith(
@@ -357,9 +355,7 @@ class _AiUsageCard extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               title: const Text('启用每日限额'),
               subtitle: Text(
-                quotaOn
-                    ? '开启后按每日上限拦截 AI 调用'
-                    : '关闭后今日不限制调用次数（仅保留冷却）',
+                quotaOn ? '开启后按每日上限拦截 AI 调用' : '关闭后今日不限制调用次数（仅保留冷却）',
               ),
               value: quotaOn,
               onChanged: (value) => vm.setAiDailyLimitEnabled(value),
@@ -380,9 +376,7 @@ class _AiUsageCard extends StatelessWidget {
                       ],
                     )
                   : null,
-              subtitle: quotaOn
-                  ? null
-                  : const Text('已关闭 — 今日不设上限'),
+              subtitle: quotaOn ? null : const Text('已关闭 — 今日不设上限'),
             ),
             Padding(
               padding: const EdgeInsets.only(top: 4),

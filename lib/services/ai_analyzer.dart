@@ -8,7 +8,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
-import '../models/reminder_draft.dart';
+import 'package:nousmind/models/reminder_draft.dart';
 
 /// Abstract backend for the AI assistant. Implementations take free-form
 /// text and/or a local image path and return a list of [ReminderDraft]
@@ -268,10 +268,7 @@ requires.
       return (label: p.$1, body: cleaned, length: cleaned.length);
     }).toList();
 
-    final totalLength = sanitized.fold<int>(
-      0,
-      (sum, p) => sum + p.length,
-    );
+    final totalLength = sanitized.fold<int>(0, (sum, p) => sum + p.length);
 
     if (totalLength <= _maxUserInputChars) {
       for (final p in sanitized) {
@@ -341,11 +338,7 @@ requires.
         ? '${trimmed.substring(0, _maxCustomPromptChars)}\n…(已截断)'
         : trimmed;
     final rendered = (timezone != null && now != null)
-        ? renderAssistantPrompt(
-            template: capped,
-            timezone: timezone,
-            now: now,
-          )
+        ? renderAssistantPrompt(template: capped, timezone: timezone, now: now)
         : capped;
     return '$rendered\n\n$_antiExtractionAppendix';
   }
@@ -355,10 +348,7 @@ requires.
   /// Cheap insurance against prompt-injection payloads that try to
   /// hide an instruction inside whitespace padding.
   static String _sanitizeForPrompt(String input) {
-    final stripped = input.replaceAll(
-      RegExp(r'[\x00-\x08\x0B-\x1F\x7F]'),
-      '',
-    );
+    final stripped = input.replaceAll(RegExp(r'[\x00-\x08\x0B-\x1F\x7F]'), '');
     return stripped.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
   }
 
@@ -388,10 +378,7 @@ requires.
     final body = <String, dynamic>{
       'model': _model,
       'messages': <Map<String, String>>[
-        <String, String>{
-          'role': 'system',
-          'content': effectivePrompt,
-        },
+        <String, String>{'role': 'system', 'content': effectivePrompt},
         <String, String>{'role': 'user', 'content': cleanedText},
       ],
       'temperature': 0.4,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../services/backup_service.dart';
+import 'package:nousmind/services/backup_service.dart';
 
 /// Compact card displayed at the top of the settings home page. Shows
 /// the current record counts and the on-disk size of the user's images.

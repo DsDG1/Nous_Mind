@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../models/reminder.dart';
-import '../services/app_settings_bridge.dart';
-import '../services/calendar_service.dart';
-import '../viewmodels/reminders_view_model.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/reminder_list_item.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/app_settings_bridge.dart';
+import 'package:nousmind/services/calendar_service.dart';
+import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/widgets/empty_state.dart';
+import 'package:nousmind/widgets/reminder_list_item.dart';
 
 /// Home screen: shows all reminders, hosts the FAB to add a new one, and
 /// routes taps to the editor and left-swipes to delete.
@@ -84,10 +84,8 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     if (!mounted) return;
     final message = switch (result) {
       CalendarAddResult.success => '已加入日历',
-      CalendarAddResult.noCalendars =>
-        '设备上没有日历账户，请先添加一个日历账户',
-      CalendarAddResult.noWritableCalendar =>
-        '没有可写入的日历，请检查日历权限',
+      CalendarAddResult.noCalendars => '设备上没有日历账户，请先添加一个日历账户',
+      CalendarAddResult.noWritableCalendar => '没有可写入的日历，请检查日历权限',
       CalendarAddResult.writeFailed => '写入日历失败，请稍后重试',
     };
     messenger

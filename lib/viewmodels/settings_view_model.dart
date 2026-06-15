@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/app_settings.dart';
-import '../services/settings_repository.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/services/settings_repository.dart';
 
 /// Owns the in-memory [AppSettings] and writes every mutation through to
 /// [SettingsRepository] before notifying listeners. The view model is
@@ -143,12 +143,7 @@ class SettingsViewModel extends ChangeNotifier {
     final current = _settings.aiCallsResetAt;
     final isNewDay = current == null || !_isSameLocalDay(current, now);
     final next = isNewDay ? 1 : _settings.aiCallsToday + 1;
-    return _update(
-      _settings.copyWith(
-        aiCallsToday: next,
-        aiCallsResetAt: now,
-      ),
-    );
+    return _update(_settings.copyWith(aiCallsToday: next, aiCallsResetAt: now));
   }
 
   /// User-facing "clear today's usage" action exposed from the AI
@@ -156,10 +151,7 @@ class SettingsViewModel extends ChangeNotifier {
   /// timestamp so the next call starts a fresh window.
   Future<void> resetAiUsage() {
     return _update(
-      _settings.copyWith(
-        aiCallsToday: 0,
-        clearAiCallsResetAt: true,
-      ),
+      _settings.copyWith(aiCallsToday: 0, clearAiCallsResetAt: true),
     );
   }
 

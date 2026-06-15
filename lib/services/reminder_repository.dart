@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../models/reminder.dart';
-import 'database.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/database.dart';
 
 class ReminderRepository {
   ReminderRepository(this._database);
@@ -123,7 +123,7 @@ class ReminderRepository {
   /// stats card.
   Future<int> count() async {
     final result = await _database.db.rawQuery(
-      "SELECT COUNT(*) AS cnt FROM reminders WHERE is_deleted = 0",
+      'SELECT COUNT(*) AS cnt FROM reminders WHERE is_deleted = 0',
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }
@@ -132,7 +132,7 @@ class ReminderRepository {
   /// the trash page header.
   Future<int> countTrash() async {
     final result = await _database.db.rawQuery(
-      "SELECT COUNT(*) AS cnt FROM reminders WHERE is_deleted = 1",
+      'SELECT COUNT(*) AS cnt FROM reminders WHERE is_deleted = 1',
     );
     return Sqflite.firstIntValue(result) ?? 0;
   }

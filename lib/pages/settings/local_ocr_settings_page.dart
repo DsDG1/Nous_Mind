@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/chinese_ocr_installer.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/services/chinese_ocr_installer.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Detail page for the on-device Chinese OCR model. Hosts the
 /// per-language enable switch and a status row.

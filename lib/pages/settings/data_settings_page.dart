@@ -6,10 +6,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../services/backup_service.dart';
-import '../../viewmodels/inspirations_view_model.dart';
-import '../../viewmodels/reminders_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/services/backup_service.dart';
+import 'package:nousmind/viewmodels/inspirations_view_model.dart';
+import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage for data management: stats, backup / restore, and
 /// bulk-clear actions. Every mutation goes through the relevant view

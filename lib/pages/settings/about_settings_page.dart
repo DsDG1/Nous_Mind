@@ -5,12 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/ai_analyzer.dart';
-import '../../services/ai_usage_guard.dart';
-import '../../services/error_log_service.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/error_analysis_sheet.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/services/ai_usage_guard.dart';
+import 'package:nousmind/services/error_log_service.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/error_analysis_sheet.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage that surfaces app branding, version metadata, the
 /// in-memory error log, and a link to the open-source licenses page.

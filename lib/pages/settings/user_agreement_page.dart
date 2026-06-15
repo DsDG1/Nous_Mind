@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../widgets/bilingual_markdown_page.dart';
+import 'package:nousmind/widgets/bilingual_markdown_page.dart';
 
 /// Renders the bundled `assets/user_agreement.md` document. The actual
 /// loading, language toggle and Markdown rendering live in

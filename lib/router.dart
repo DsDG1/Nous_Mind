@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'models/inspiration.dart';
-import 'models/reminder.dart';
-import 'pages/app_shell.dart';
-import 'pages/inspiration_editor_page.dart';
-import 'pages/inspirations_home_page.dart';
-import 'pages/reminder_editor_page.dart';
-import 'pages/reminders_home_page.dart';
-import 'pages/settings/ai_prompts_settings_page.dart';
-import 'pages/settings/ai_settings_page.dart';
-import 'pages/settings/appearance_settings_page.dart';
-import 'pages/settings/changelog_page.dart';
-import 'pages/settings/deepseek_settings_page.dart';
-import 'pages/settings/data_settings_page.dart';
-import 'pages/settings/local_ocr_settings_page.dart';
-import 'pages/settings/notification_settings_page.dart';
-import 'pages/settings/about_settings_page.dart';
-import 'pages/settings/privacy_policy_page.dart';
-import 'pages/settings/trash_page.dart';
-import 'pages/settings/user_agreement_page.dart';
-import 'pages/settings_page.dart';
-import 'widgets/circular_reveal_clip.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/pages/app_shell.dart';
+import 'package:nousmind/pages/inspiration_editor_page.dart';
+import 'package:nousmind/pages/inspirations_home_page.dart';
+import 'package:nousmind/pages/reminder_editor_page.dart';
+import 'package:nousmind/pages/reminders_home_page.dart';
+import 'package:nousmind/pages/settings/ai_prompts_settings_page.dart';
+import 'package:nousmind/pages/settings/ai_settings_page.dart';
+import 'package:nousmind/pages/settings/appearance_settings_page.dart';
+import 'package:nousmind/pages/settings/changelog_page.dart';
+import 'package:nousmind/pages/settings/deepseek_settings_page.dart';
+import 'package:nousmind/pages/settings/data_settings_page.dart';
+import 'package:nousmind/pages/settings/local_ocr_settings_page.dart';
+import 'package:nousmind/pages/settings/notification_settings_page.dart';
+import 'package:nousmind/pages/settings/about_settings_page.dart';
+import 'package:nousmind/pages/settings/privacy_policy_page.dart';
+import 'package:nousmind/pages/settings/trash_page.dart';
+import 'package:nousmind/pages/settings/user_agreement_page.dart';
+import 'package:nousmind/pages/settings_page.dart';
+import 'package:nousmind/widgets/circular_reveal_clip.dart';
 
 /// Navigator keys — separate per branch so each tab maintains its own
 /// navigation history, plus a root key for full-screen overlays (editors).
@@ -191,8 +191,7 @@ final GoRouter router = GoRouter(
                     ),
                     GoRoute(
                       path: 'user-agreement',
-                      builder: (context, state) =>
-                          const UserAgreementPage(),
+                      builder: (context, state) => const UserAgreementPage(),
                     ),
                   ],
                 ),

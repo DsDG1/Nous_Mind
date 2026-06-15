@@ -4,16 +4,11 @@ import 'package:device_calendar/device_calendar.dart' as dc;
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../models/reminder.dart';
+import 'package:nousmind/models/reminder.dart';
 
 /// Result of [CalendarService.addReminder]. Carries enough detail for
 /// the UI to show a meaningful SnackBar instead of a generic "已取消".
-enum CalendarAddResult {
-  success,
-  noCalendars,
-  noWritableCalendar,
-  writeFailed,
-}
+enum CalendarAddResult { success, noCalendars, noWritableCalendar, writeFailed }
 
 /// Thin wrapper around the `device_calendar` plugin so the rest of the
 /// app talks to a single [CalendarService] surface, mirroring how

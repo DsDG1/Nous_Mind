@@ -3,11 +3,11 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
 
-import '../models/reminder.dart';
-import '../services/inspiration_image_store.dart';
-import '../services/notification_service.dart';
-import '../services/reminder_repository.dart';
-import 'settings_view_model.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
 
 /// Holds the in-memory list of reminders, persists every change, and keeps
 /// the OS-level scheduled notifications in sync.

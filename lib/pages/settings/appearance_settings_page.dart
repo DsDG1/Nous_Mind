@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/app_settings.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage for theme mode and accent (seed) color.
 ///

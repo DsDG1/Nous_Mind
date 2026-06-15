@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
 
-import '../models/app_settings.dart';
-import 'database.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/services/database.dart';
 
 class SettingsRepository {
   SettingsRepository(this._database);

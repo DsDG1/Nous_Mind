@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/ai_analyzer.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage for editing the system prompts used by the AI
 /// surfaces (error analysis, reminder adjustment). Each field shows

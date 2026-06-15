@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../models/inspiration.dart';
-import '../viewmodels/inspirations_view_model.dart';
-import '../widgets/empty_state.dart';
-import '../widgets/inspiration_list_item.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/viewmodels/inspirations_view_model.dart';
+import 'package:nousmind/widgets/empty_state.dart';
+import 'package:nousmind/widgets/inspiration_list_item.dart';
 
 /// Home screen for the inspirations tab: shows all inspirations, hosts the
 /// FAB to add a new one, and routes taps to the editor and left-swipes to

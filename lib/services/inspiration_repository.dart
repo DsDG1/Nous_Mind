@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 
-import '../models/inspiration.dart';
-import 'database.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/services/database.dart';
 
 class InspirationRepository {
   InspirationRepository(this._database);

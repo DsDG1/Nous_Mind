@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../models/inspiration.dart';
-import '../utils/date_format.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/utils/date_format.dart';
 
 /// A swipe-to-delete list row representing a single [Inspiration].
 ///

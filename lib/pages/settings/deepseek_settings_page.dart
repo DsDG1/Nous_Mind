@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Detail page for the DeepSeek provider. Hosts the per-provider switches
 /// and the API key editor. The enable switch here mirrors the one on the

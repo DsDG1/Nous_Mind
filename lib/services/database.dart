@@ -6,9 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../models/app_settings.dart';
-import '../models/inspiration.dart';
-import '../models/reminder.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/models/inspiration.dart';
+import 'package:nousmind/models/reminder.dart';
 
 class AppDatabase {
   AppDatabase._(this._db);

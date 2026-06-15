@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/reminder.dart';
-import '../utils/date_format.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/utils/date_format.dart';
 
 /// A swipe-to-delete list row representing a single [Reminder].
 ///

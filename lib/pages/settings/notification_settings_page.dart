@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/app_settings.dart';
-import '../../router.dart';
-import '../../services/notification_service.dart';
-import '../../viewmodels/settings_view_model.dart';
-import '../../widgets/reminder_popup.dart';
-import '../../widgets/settings_section.dart';
+import 'package:nousmind/models/app_settings.dart';
+import 'package:nousmind/router.dart';
+import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/reminder_popup.dart';
+import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage for notification behavior.
 ///

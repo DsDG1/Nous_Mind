@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/reminder.dart';
-import '../../viewmodels/reminders_view_model.dart';
-import '../../widgets/empty_state.dart';
+import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/widgets/empty_state.dart';
 
 /// Trash page reachable from `设置 → 数据 → 回收站`. Lists every
 /// soft-deleted reminder, exposes two top-level bulk actions
