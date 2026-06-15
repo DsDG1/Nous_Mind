@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/ai_analyzer.dart';
 import '../../services/error_log_service.dart';
+import '../../viewmodels/settings_view_model.dart';
+import '../../widgets/error_analysis_sheet.dart';
 import '../../widgets/settings_section.dart';
 
 /// Settings subpage that surfaces app branding, version metadata, the
@@ -269,11 +272,33 @@ class _LogHeader {
   int get hashCode => Object.hash(isEmpty, count);
 }
 
-/// Compact card rendering one captured error entry.
+/// Compact card rendering one captured error entry. Tapping the "AI
+/// 分析" affordance hands the formatted entry to [ErrorAnalysisSheet],
+/// which calls [AiAnalyzer.analyzeError] and renders the diagnosis.
 class _ErrorEntryCard extends StatelessWidget {
   const _ErrorEntryCard({required this.entry});
 
   final ErrorLogEntry entry;
+
+  Future<void> _runAiAnalysis(BuildContext context) async {
+    final settings = context.read<SettingsViewModel>().settings;
+    final messenger = ScaffoldMessenger.of(context);
+    if (!settings.aiAssistantEnabled || settings.aiApiKey == null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('请先在 设置 → AI 助手 配置 DeepSeek')),
+        );
+      return;
+    }
+    await ErrorAnalysisSheet.show(
+      context,
+      entry: entry,
+      analyzer: context.read<AiAnalyzer>(),
+      apiKey: settings.aiApiKey!,
+      systemPrompt: settings.aiErrorAnalysisPrompt,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +308,7 @@ class _ErrorEntryCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
@@ -315,6 +340,18 @@ class _ErrorEntryCard extends StatelessWidget {
               style: textTheme.bodySmall,
               maxLines: 4,
               overflow: TextOverflow.ellipsis,
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _runAiAnalysis(context),
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('AI 分析'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+              ),
             ),
           ],
         ),

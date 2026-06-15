@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../services/chinese_ocr_installer.dart';
 import '../../viewmodels/settings_view_model.dart';
+import '../../widgets/settings_section.dart';
 
 /// Settings subpage that lists the configured AI assistant providers.
 /// Each provider renders as a tappable card with an inline enable
@@ -18,21 +19,59 @@ class AiSettingsPage extends StatelessWidget {
       appBar: AppBar(title: const Text('AI 助手')),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           children: const <Widget>[
             Padding(
-              padding: EdgeInsets.fromLTRB(8, 0, 8, 12),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Text(
                 '选择并配置要使用的 AI 助手',
                 style: TextStyle(fontSize: 13, color: Colors.grey),
               ),
             ),
-            _LocalOcrCard(),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: _LocalOcrCard(),
+            ),
             SizedBox(height: 12),
-            _DeepSeekProviderCard(),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: _DeepSeekProviderCard(),
+            ),
+            SizedBox(height: 12),
+            _PromptsSection(),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "提示词" entry: routes to [AiPromptsSettingsPage] where the user can
+/// override the three built-in prompts. Subtitle indicates how many of
+/// the three are customized so the umbrella page tells the user at a
+/// glance whether anything has been changed.
+class _PromptsSection extends StatelessWidget {
+  const _PromptsSection();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = context.watch<SettingsViewModel>().settings;
+    final customCount = <bool>[
+      settings.aiAssistantPrompt != null,
+      settings.aiPolishPrompt != null,
+      settings.aiErrorAnalysisPrompt != null,
+    ].where((c) => c).length;
+    return SettingsSection(
+      title: '提示词',
+      icon: Icons.edit_note_outlined,
+      children: <Widget>[
+        SettingsTile(
+          leading: const Icon(Icons.tune_outlined),
+          title: '自定义 prompt',
+          subtitle: customCount == 0 ? '全部使用默认' : '已自定义 $customCount / 3',
+          onTap: () => context.push('/settings/ai/prompts'),
+        ),
+      ],
     );
   }
 }

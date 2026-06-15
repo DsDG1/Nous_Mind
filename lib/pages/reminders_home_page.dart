@@ -97,6 +97,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       ),
       floatingActionButton: FloatingActionButton(
         key: _fabKey,
+        heroTag: 'reminders-fab',
         onPressed: () => _openCreateChooser(context),
         tooltip: '添加提醒',
         child: const Icon(Icons.add),

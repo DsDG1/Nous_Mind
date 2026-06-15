@@ -81,7 +81,7 @@ class _DeepSeekSettingsPageState extends State<DeepSeekSettingsPage> {
             final stored = vm.settings.aiApiKey;
             final isConfigured = stored != null;
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 16),
               children: <Widget>[
                 SettingsSection(
                   title: '启用 AI 助手',
@@ -168,50 +168,56 @@ class _DeepSeekSettingsPageState extends State<DeepSeekSettingsPage> {
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(Icons.info_outline, color: colors.primary),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'AI 助手使用 DeepSeek-V4 Flash 解析文本与截图,'
-                          '需要联网。',
-                          style: TextStyle(fontSize: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(Icons.info_outline, color: colors.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'AI 助手使用 DeepSeek-V4 Flash 解析文本与截图,'
+                            '需要联网。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: colors.onErrorContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'AI 生成内容可能不准确或不完整,请自行核对,使用风险自负。',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onErrorContainer,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: colors.onErrorContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'AI 生成内容可能不准确或不完整,请自行核对,使用风险自负。',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.onErrorContainer,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

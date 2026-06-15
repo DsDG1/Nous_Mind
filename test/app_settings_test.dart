@@ -24,10 +24,27 @@ void main() {
       expect(restored.aiApiKey, 'sk-x');
     });
 
-    test('defaults chineseOcrEnabled to false when key is absent', () {
+    test('defaults chineseOcrEnabled to true when key is absent', () {
+      // Changed in 1.3.1: new installs opt in to the bundled Chinese OCR
+      // by default. Existing users keep whatever was already in their
+      // JSON blob (the persisted `false` survives because `fromJson` only
+      // applies the default when the key is missing).
       final parsed = AppSettings.fromJson(const <String, dynamic>{});
-      expect(parsed.chineseOcrEnabled, isFalse);
+      expect(parsed.chineseOcrEnabled, isTrue);
     });
+
+    test(
+      'preserves chineseOcrEnabled=false from older settings blobs',
+      () {
+        // Round-trip a pre-1.3.1 settings JSON that explicitly stored
+        // the old default. The new default must NOT override the
+        // user's saved value.
+        final parsed = AppSettings.fromJson(const <String, dynamic>{
+          'chinese_ocr_enabled': false,
+        });
+        expect(parsed.chineseOcrEnabled, isFalse);
+      },
+    );
 
     test('round-trips chineseOcrEnabled with the rest of the settings', () {
       const original = AppSettings(

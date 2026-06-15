@@ -131,6 +131,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
       final polished = await analyzer.polishText(
         text: original,
         apiKey: apiKey,
+        systemPrompt: settings.aiPolishPrompt,
       );
       if (!mounted) return;
       final accepted = await AiPolishSheet.show(

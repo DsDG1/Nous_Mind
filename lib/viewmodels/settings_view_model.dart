@@ -69,4 +69,38 @@ class SettingsViewModel extends ChangeNotifier {
   /// switch never bricks OCR.
   Future<void> setChineseOcrEnabled(bool value) =>
       _update(_settings.copyWith(chineseOcrEnabled: value));
+
+  /// Persists the user's custom prompt template for the AI assistant's
+  /// reminder-extraction flow. `null` or whitespace clears the field,
+  /// which makes [DeepSeekAnalyzer] fall back to its built-in default
+  /// (`defaultAssistantPromptTemplate`).
+  Future<void> setAiAssistantPrompt(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _update(_settings.copyWith(clearAiAssistantPrompt: true));
+    }
+    return _update(_settings.copyWith(aiAssistantPrompt: trimmed));
+  }
+
+  /// Persists the user's custom system prompt for the "AI 一键润色"
+  /// flow. `null` or whitespace clears the field, restoring the
+  /// built-in default (`DeepSeekAnalyzer.defaultPolishPrompt`).
+  Future<void> setAiPolishPrompt(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _update(_settings.copyWith(clearAiPolishPrompt: true));
+    }
+    return _update(_settings.copyWith(aiPolishPrompt: trimmed));
+  }
+
+  /// Persists the user's custom system prompt for the "错误日志 → AI
+  /// 分析" flow. `null` or whitespace clears the field, restoring the
+  /// built-in default (`DeepSeekAnalyzer.defaultErrorAnalysisPrompt`).
+  Future<void> setAiErrorAnalysisPrompt(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _update(_settings.copyWith(clearAiErrorAnalysisPrompt: true));
+    }
+    return _update(_settings.copyWith(aiErrorAnalysisPrompt: trimmed));
+  }
 }

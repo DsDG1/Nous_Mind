@@ -68,6 +68,7 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'inspirations-fab',
         onPressed: () => _openEditor(context, null),
         tooltip: '添加灵感',
         child: const Icon(Icons.add),

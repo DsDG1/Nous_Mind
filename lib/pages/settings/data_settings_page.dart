@@ -183,9 +183,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
             action: SnackBarAction(
               label: '撤销',
               onPressed: () async {
-                for (final id in snapshot) {
-                  await remindersVm.restore(id);
-                }
+                await remindersVm.restoreAll(snapshot);
                 if (!mounted) return;
                 messenger
                   ..hideCurrentSnackBar()

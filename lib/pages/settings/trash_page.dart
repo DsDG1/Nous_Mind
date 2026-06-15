@@ -5,17 +5,11 @@ import 'package:provider/provider.dart';
 import '../../models/reminder.dart';
 import '../../viewmodels/reminders_view_model.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/reminder_list_item.dart';
 
 /// Trash page reachable from `设置 → 数据 → 回收站`. Lists every
 /// soft-deleted reminder, exposes two top-level bulk actions
 /// ("全部恢复" / "永久删除"), and renders a per-row "X 天后清除"
 /// countdown based on [RemindersViewModel.trashRetention].
-///
-/// The page does not maintain its own copy of the trash list —
-/// the parent [RemindersViewModel] is the single source of truth, and
-/// any mutation flows through it so the active reminders list and
-/// the data-settings tile count stay in sync without extra plumbing.
 class TrashPage extends StatefulWidget {
   const TrashPage({super.key});
 
@@ -24,26 +18,24 @@ class TrashPage extends StatefulWidget {
 }
 
 class _TrashPageState extends State<TrashPage> {
-  late Future<List<Reminder>> _loadFuture;
+  List<Reminder> _trashItems = [];
+  bool _loading = true;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
-    _loadFuture = _loadTrash();
-  }
-
-  Future<List<Reminder>> _loadTrash() async {
-    final repo = context.read<RemindersViewModel>();
-    // We re-read the repository via the VM's helper to avoid coupling
-    // this page to the underlying SQLite schema; a future move to a
-    // dedicated provider or stream can swap the implementation here.
-    return repo.refreshAndFetchTrash();
+    _reload();
   }
 
   Future<void> _reload() async {
-    final next = await _loadTrash();
+    final vm = context.read<RemindersViewModel>();
+    final items = await vm.refreshAndFetchTrash();
     if (!mounted) return;
-    setState(() => _loadFuture = Future<List<Reminder>>.value(next));
+    setState(() {
+      _trashItems = items;
+      _loading = false;
+    });
   }
 
   Future<void> _confirmAndPurge() async {
@@ -69,27 +61,30 @@ class _TrashPageState extends State<TrashPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final vm = context.read<RemindersViewModel>();
     final removed = await vm.purgeTrash();
     await _reload();
     if (!mounted) return;
+    setState(() => _busy = false);
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('已永久删除 $removed 项')));
   }
 
-  Future<void> _restoreAll(List<Reminder> items) async {
+  Future<void> _restoreAll() async {
+    setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
     final vm = context.read<RemindersViewModel>();
-    for (final r in items) {
-      await vm.restore(r.id);
-    }
+    final ids = _trashItems.map((r) => r.id).toList();
+    final restored = await vm.restoreAll(ids);
     await _reload();
     if (!mounted) return;
+    setState(() => _busy = false);
     messenger
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已恢复 ${items.length} 项')));
+      ..showSnackBar(SnackBar(content: Text('已恢复 $restored 项')));
   }
 
   @override
@@ -98,70 +93,66 @@ class _TrashPageState extends State<TrashPage> {
       appBar: AppBar(
         title: const Text('回收站'),
         actions: <Widget>[
-          Consumer<RemindersViewModel>(
-            builder: (context, vm, _) {
-              if (vm.trashCount == 0) return const SizedBox.shrink();
-              return TextButton.icon(
-                icon: const Icon(Icons.delete_forever_outlined),
-                label: const Text('永久删除'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                onPressed: _confirmAndPurge,
-              );
-            },
-          ),
+          if (_trashItems.isNotEmpty)
+            TextButton.icon(
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('永久删除'),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: _busy ? null : _confirmAndPurge,
+            ),
         ],
       ),
       body: SafeArea(
-        child: FutureBuilder<List<Reminder>>(
-          future: _loadFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState != ConnectionState.done) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            final items = snapshot.data ?? const <Reminder>[];
-            if (items.isEmpty) {
-              return const EmptyState(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _trashItems.isEmpty
+            ? const EmptyState(
                 icon: Icons.delete_outline,
                 title: '回收站是空的',
                 subtitle: '删除的提醒会在这里保留 30 天',
-              );
-            }
-            return Column(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          icon: const Icon(Icons.restore),
-                          label: Text('全部恢复（${items.length}）'),
-                          onPressed: () => _restoreAll(items),
+              )
+            : Column(
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            icon: const Icon(Icons.restore),
+                            label: Text('全部恢复（${_trashItems.length}）'),
+                            onPressed: _busy ? null : _restoreAll,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final r = items[index];
-                      return _TrashListItem(
-                        reminder: r,
-                        onTap: () =>
-                            context.push('/editor', extra: (r, Offset.zero)),
-                      );
-                    },
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _trashItems.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final r = _trashItems[index];
+                        return _TrashListItem(
+                          reminder: r,
+                          onTap: _busy
+                              ? null
+                              : () async {
+                                  await context.push(
+                                    '/editor',
+                                    extra: (r, Offset.zero),
+                                  );
+                                  if (!mounted) return;
+                                  await _reload();
+                                },
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
-        ),
+                ],
+              ),
       ),
     );
   }
@@ -174,7 +165,7 @@ class _TrashListItem extends StatelessWidget {
   const _TrashListItem({required this.reminder, required this.onTap});
 
   final Reminder reminder;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   String _daysRemaining(DateTime deletedAt) {
     final cutoff = deletedAt.add(RemindersViewModel.trashRetention);

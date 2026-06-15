@@ -148,6 +148,7 @@ class AiAssistViewModel extends ChangeNotifier {
     required DateTime now,
     String? text,
     String? imagePath,
+    String? systemPromptTemplate,
   }) async {
     if (_isLockedDueToAuth) return;
     if (isThrottled) return;
@@ -175,6 +176,7 @@ class AiAssistViewModel extends ChangeNotifier {
         apiKey: apiKey,
         timezone: timezone,
         now: now,
+        systemPromptTemplate: systemPromptTemplate,
       );
       _candidates = drafts;
       _status = AiAssistStatus.success;

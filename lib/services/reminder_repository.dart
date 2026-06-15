@@ -82,6 +82,43 @@ class ReminderRepository {
     );
   }
 
+  /// Returns a single reminder row by primary key, or `null` when the
+  /// id does not match any row. The query does not filter on
+  /// [is_deleted] so callers can find trashed rows too.
+  Future<Reminder?> findById(String id) async {
+    final rows = await _database.db.query(
+      'reminders',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _fromRow(rows.first);
+  }
+
+  /// Batch-restores multiple reminders in a single SQL pass.
+  Future<void> restoreByIds(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final placeholders = List<String>.filled(ids.length, '?').join(',');
+    await _database.db.update(
+      'reminders',
+      {'is_deleted': 0, 'deleted_at': null},
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
+  /// Permanently removes multiple reminders in a single SQL pass.
+  Future<void> permanentDeleteByIds(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final placeholders = List<String>.filled(ids.length, '?').join(',');
+    await _database.db.delete(
+      'reminders',
+      where: 'id IN ($placeholders)',
+      whereArgs: ids,
+    );
+  }
+
   /// Counts active (non-trashed) reminders. Used by the home-page
   /// stats card.
   Future<int> count() async {

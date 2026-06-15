@@ -44,7 +44,7 @@ class _LocalOcrSettingsPageState extends State<LocalOcrSettingsPage> {
           builder: (context, vm, installer, _) {
             final enabled = vm.settings.chineseOcrEnabled;
             return ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 16),
               children: <Widget>[
                 SettingsSection(
                   title: '启用 中文 OCR',
@@ -66,51 +66,57 @@ class _LocalOcrSettingsPageState extends State<LocalOcrSettingsPage> {
                   icon: Icons.storage_outlined,
                   children: <Widget>[_StatusTile(installer: installer)],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(Icons.info_outline, color: colors.primary),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          '模型随 App 一起打包(约 4 MB),无需联网下载,'
-                          '离线可用。',
-                          style: TextStyle(fontSize: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(Icons.info_outline, color: colors.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            '模型随 App 一起打包(约 4 MB),无需联网下载,'
+                            '离线可用。',
+                            style: TextStyle(fontSize: 12),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: colors.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        color: colors.onErrorContainer,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '中文识别失败时,会自动回退到通用脚本,'
-                          'OCR 仍可工作,只是中文识别效果会下降。',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colors.onErrorContainer,
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colors.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: colors.onErrorContainer,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '中文识别失败时,会自动回退到通用脚本,'
+                            'OCR 仍可工作,只是中文识别效果会下降。',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colors.onErrorContainer,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],

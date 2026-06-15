@@ -18,12 +18,20 @@ import '../models/reminder_draft.dart';
 /// supplied per-call so the analyzer itself stays stateless and can be
 /// re-used across settings changes.
 abstract class AiAnalyzer {
+  /// Extracts reminder candidates from [text] / [imagePath].
+  ///
+  /// [systemPromptTemplate] lets the caller override the built-in system
+  /// prompt. The template may contain the placeholders `{{now}}`,
+  /// `{{timezone}}`, `{{offset}}`, `{{weekday}}`, `{{tomorrow}}` which
+  /// are substituted at call time. When `null`, the built-in default
+  /// (see [DeepSeekAnalyzer.defaultAssistantPromptTemplate]) is used.
   Future<List<ReminderDraft>> analyze({
     String? text,
     String? imagePath,
     required String apiKey,
     required String timezone,
     required DateTime now,
+    String? systemPromptTemplate,
   });
 
   /// Rewrites [text] into a more readable, well-structured form while
@@ -32,7 +40,25 @@ abstract class AiAnalyzer {
   /// cases (e.g. server outage); the editor surfaces failures through
   /// the same [AiAnalysisException] hierarchy as [analyze] so the UX
   /// stays consistent.
-  Future<String> polishText({required String text, required String apiKey});
+  ///
+  /// [systemPrompt] overrides the built-in polish prompt; pass `null`
+  /// to use the default (see [DeepSeekAnalyzer.defaultPolishPrompt]).
+  Future<String> polishText({
+    required String text,
+    required String apiKey,
+    String? systemPrompt,
+  });
+
+  /// Analyses a free-form error log entry (timestamp + source + message
+  /// + stack trace) and returns a plain-text Chinese diagnosis. The
+  /// settings page exposes the "错误日志 → AI 分析" action that drives
+  /// this call. [systemPrompt] overrides the built-in prompt; pass
+  /// `null` to use [DeepSeekAnalyzer.defaultErrorAnalysisPrompt].
+  Future<String> analyzeError({
+    required String text,
+    required String apiKey,
+    String? systemPrompt,
+  });
 
   /// Releases any owned resources (HTTP clients, native recognizers).
   void dispose() {}
@@ -96,7 +122,11 @@ class DeepSeekAnalyzer implements AiAnalyzer {
   static const String _model = 'deepseek-v4-flash';
   static const Duration _timeout = Duration(seconds: 30);
   static const int _maxImageEdgePx = 2048;
-  static const String _polishSystemPrompt = '''
+
+  /// Default system prompt for [polishText]. Surfaced publicly so the
+  /// settings page can pre-fill its editor with the built-in value and
+  /// reset to it when the user clears the field.
+  static const String defaultPolishPrompt = '''
 你是中文写作润色助手。直接对用户文本做以下优化:
 1. 修正错别字、标点、口语化表达,使之更可读
 2. 在保留原意的前提下,适当重组句式或使用列表/分段,提升条理
@@ -104,6 +134,76 @@ class DeepSeekAnalyzer implements AiAnalyzer {
 
 严禁输出引号、说明、提示语、Markdown 围栏。只返回润色后的纯文本。
 ''';
+
+  /// Default system prompt for [analyzeError]. Output is plain Chinese
+  /// text (no Markdown fences); the user-facing sheet renders it as
+  /// selectable text.
+  static const String defaultErrorAnalysisPrompt = '''
+你是一位 Flutter / Dart 资深工程师,负责给应用日志里出现的错误做诊断。
+读完用户提供的错误信息和堆栈后,用简体中文按下面结构回答,小标题加粗:
+1. **可能原因**:1-3 条最有可能的根因,按可能性排序
+2. **排查建议**:可立即执行的下一步动作(检查哪一行代码、加什么日志、查什么配置)
+3. **类似情况**(可选):常见误判、相关 issue 关键词或官方文档锚点
+
+只输出纯文本,不要输出 Markdown 代码围栏。回答应当聚焦、可操作,避免空话。
+''';
+
+  /// Default system-prompt template for [analyze]. Contains template
+  /// placeholders that are substituted by [renderAssistantPrompt] at
+  /// call time:
+  ///
+  /// - `{{now}}`       — wall-clock "YYYY-MM-DD HH:mm"
+  /// - `{{timezone}}`  — IANA zone, e.g. "Asia/Shanghai"
+  /// - `{{offset}}`    — UTC offset suffix, e.g. "+08:00"
+  /// - `{{weekday}}`   — 中文星期, e.g. "星期一"
+  /// - `{{tomorrow}}`  — "YYYY-MM-DD" for tomorrow
+  ///
+  /// Users editing this template via the settings page may remove any
+  /// placeholder; the renderer leaves unknown tokens intact.
+  static const String defaultAssistantPromptTemplate = '''
+你是日程助理，从用户文本中提取提醒事项。
+输入可能包含 OCR 文字（含少量错字），请理解语义后提取。
+
+【时间规则】
+所有时间都是 {{timezone}} 时区的本地时间，即墙上钟表的读数，不是 UTC。
+格式：ISO 8601，末尾固定携带偏移 {{offset}}。
+"2点"就是该日期的 02:00 / 14:00，"3点"就是 03:00 / 15:00，钟表显示几点就写几点。
+
+示例：
+"明天下午2点去上海" → {"reminders":[{"title":"去上海","suggested_time":"{{tomorrow}}T14:00:00{{offset}}","reason":"明天下午2点"}]}
+"明天下午3点开会" → {"reminders":[{"title":"开会","suggested_time":"{{tomorrow}}T15:00:00{{offset}}","reason":"明天下午3点"}]}
+
+当前时间：{{now}} ({{weekday}})
+时区：{{timezone}}
+
+【输出】只输出纯 JSON，勿用 Markdown 代码块。
+{"reminders":[{"title":"简短标题","suggested_time":"ISO8601+偏移","reason":"简短依据"}]}
+
+【规则】
+1. 只提取未来、明确的提醒；无则返回 {"reminders": []}
+2. "今天X点"若已早于当前时刻则改为"明天X点"；缺少年份默认今年
+3. 标题简洁（≤30字），如"买菜"、"回电话给张三"
+''';
+
+  /// Substitutes the `{{now}} {{timezone}} {{offset}} {{weekday}}
+  /// {{tomorrow}}` placeholders inside [template] with the current
+  /// runtime values. Unknown tokens are left intact so user-edited
+  /// templates degrade gracefully.
+  static String renderAssistantPrompt({
+    required String template,
+    required String timezone,
+    required DateTime now,
+  }) {
+    return template
+        .replaceAll('{{now}}', _formatDateTime(now))
+        .replaceAll('{{timezone}}', timezone)
+        .replaceAll('{{offset}}', _formatOffset(now))
+        .replaceAll('{{weekday}}', _weekdayLabel(now.weekday))
+        .replaceAll(
+          '{{tomorrow}}',
+          _formatDate(now.add(const Duration(days: 1))),
+        );
+  }
 
   /// Wires the analyzer to read the user's
   /// [AppSettings.chineseOcrEnabled] preference on every [analyze]
@@ -141,6 +241,7 @@ class DeepSeekAnalyzer implements AiAnalyzer {
     required String apiKey,
     required String timezone,
     required DateTime now,
+    String? systemPromptTemplate,
   }) async {
     final trimmedKey = apiKey.trim();
     if (trimmedKey.isEmpty) {
@@ -149,14 +250,16 @@ class DeepSeekAnalyzer implements AiAnalyzer {
 
     final ocrText = imagePath != null ? await _runOcr(imagePath) : '';
     final combined = _composeUserContent(userText: text, ocrText: ocrText);
+    final systemContent = renderAssistantPrompt(
+      template: systemPromptTemplate ?? defaultAssistantPromptTemplate,
+      timezone: timezone,
+      now: now,
+    );
 
     final body = <String, dynamic>{
       'model': _model,
       'messages': <Map<String, String>>[
-        <String, String>{
-          'role': 'system',
-          'content': _systemPrompt(timezone: timezone, now: now),
-        },
+        <String, String>{'role': 'system', 'content': systemContent},
         <String, String>{'role': 'user', 'content': combined},
       ],
       'response_format': <String, String>{'type': 'json_object'},
@@ -165,58 +268,7 @@ class DeepSeekAnalyzer implements AiAnalyzer {
       'max_tokens': 1024,
     };
 
-    final http.Response response;
-    try {
-      response = await _client
-          .post(
-            Uri.parse(_endpoint),
-            headers: <String, String>{
-              'Authorization': 'Bearer $trimmedKey',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(_timeout);
-    } on TimeoutException {
-      throw AiNetworkException('请求超时,请检查网络后重试');
-    } on SocketException {
-      throw AiNetworkException('网络异常,请检查连接后重试');
-    } on http.ClientException {
-      throw AiNetworkException('网络异常,请检查连接后重试');
-    }
-
-    final status = response.statusCode;
-    if (status == 401 || status == 403) {
-      throw AiAuthException('API 密钥无效,请到 设置 → AI 助手 检查');
-    }
-    if (status == 429) {
-      throw AiRateLimitException('请求过于频繁,请稍后再试');
-    }
-    if (status >= 500) {
-      throw AiServerException('AI 服务暂时不可用 ($status)');
-    }
-    if (status != 200) {
-      throw AiServerException('AI 服务返回异常 ($status)');
-    }
-
-    final String content;
-    try {
-      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final choices = decoded['choices'] as List<dynamic>?;
-      if (choices == null || choices.isEmpty) {
-        throw const FormatException('Missing choices');
-      }
-      final first = choices.first as Map<String, dynamic>;
-      final message = first['message'] as Map<String, dynamic>?;
-      final raw = message?['content'];
-      if (raw is! String) {
-        throw const FormatException('Missing content');
-      }
-      content = raw;
-    } on FormatException {
-      throw AiParseException('AI 返回格式无法解析');
-    }
-
+    final content = await _chatCompletion(trimmedKey: trimmedKey, body: body);
     return parseAssistantJson(content);
   }
 
@@ -229,6 +281,7 @@ class DeepSeekAnalyzer implements AiAnalyzer {
   Future<String> polishText({
     required String text,
     required String apiKey,
+    String? systemPrompt,
   }) async {
     final trimmedKey = apiKey.trim();
     if (trimmedKey.isEmpty) {
@@ -241,7 +294,10 @@ class DeepSeekAnalyzer implements AiAnalyzer {
     final body = <String, dynamic>{
       'model': _model,
       'messages': <Map<String, String>>[
-        <String, String>{'role': 'system', 'content': _polishSystemPrompt},
+        <String, String>{
+          'role': 'system',
+          'content': systemPrompt ?? defaultPolishPrompt,
+        },
         <String, String>{'role': 'user', 'content': text},
       ],
       // Plain text response — explicitly NOT json_object, otherwise the
@@ -250,6 +306,56 @@ class DeepSeekAnalyzer implements AiAnalyzer {
       'max_tokens': 1024,
     };
 
+    final raw = await _chatCompletion(trimmedKey: trimmedKey, body: body);
+    return _stripCodeFences(raw).trim();
+  }
+
+  /// Analyses an error-log entry (timestamp + source + message + stack
+  /// trace) and returns a plain-text Chinese diagnosis. Reuses the same
+  /// HTTP / exception machinery as [polishText] so the calling sheet
+  /// can map failures consistently. The model temperature is held low
+  /// (0.4) because reproducible diagnoses are more useful than creative
+  /// prose for stack traces.
+  @override
+  Future<String> analyzeError({
+    required String text,
+    required String apiKey,
+    String? systemPrompt,
+  }) async {
+    final trimmedKey = apiKey.trim();
+    if (trimmedKey.isEmpty) {
+      throw AiAuthException('API 密钥无效,请到 设置 → AI 助手 检查');
+    }
+    if (text.trim().isEmpty) {
+      throw AiParseException('日志为空,无法分析');
+    }
+
+    final body = <String, dynamic>{
+      'model': _model,
+      'messages': <Map<String, String>>[
+        <String, String>{
+          'role': 'system',
+          'content': systemPrompt ?? defaultErrorAnalysisPrompt,
+        },
+        <String, String>{'role': 'user', 'content': text},
+      ],
+      'temperature': 0.4,
+      'max_tokens': 1024,
+    };
+
+    final raw = await _chatCompletion(trimmedKey: trimmedKey, body: body);
+    return _stripCodeFences(raw).trim();
+  }
+
+  /// Sends a chat-completions POST and returns the
+  /// `choices[0].message.content` string. Maps network / status errors
+  /// onto the [AiAnalysisException] hierarchy so every caller surfaces
+  /// the same Chinese SnackBar copy regardless of which endpoint it
+  /// hits.
+  Future<String> _chatCompletion({
+    required String trimmedKey,
+    required Map<String, dynamic> body,
+  }) async {
     final http.Response response;
     try {
       response = await _client
@@ -296,7 +402,7 @@ class DeepSeekAnalyzer implements AiAnalyzer {
       if (raw is! String) {
         throw const FormatException('Missing content');
       }
-      return _stripCodeFences(raw).trim();
+      return raw;
     } on FormatException {
       throw AiParseException('AI 返回格式无法解析');
     }
@@ -421,39 +527,6 @@ class DeepSeekAnalyzer implements AiAnalyzer {
       buffer.write('(无内容)');
     }
     return buffer.toString();
-  }
-
-  static String _systemPrompt({
-    required String timezone,
-    required DateTime now,
-  }) {
-    final weekday = _weekdayLabel(now.weekday);
-    final offset = _formatOffset(now);
-    final tomorrow = _formatDate(now.add(const Duration(days: 1)));
-    return '''
-你是日程助理，从用户文本中提取提醒事项。
-输入可能包含 OCR 文字（含少量错字），请理解语义后提取。
-
-【时间规则】
-所有时间都是 $timezone 时区的本地时间，即墙上钟表的读数，不是 UTC。
-格式：ISO 8601，末尾固定携带偏移 $offset。
-"2点"就是该日期的 02:00 / 14:00，"3点"就是 03:00 / 15:00，钟表显示几点就写几点。
-
-示例：
-"明天下午2点去上海" → {"reminders":[{"title":"去上海","suggested_time":"${tomorrow}T14:00:00$offset","reason":"明天下午2点"}]}
-"明天下午3点开会" → {"reminders":[{"title":"开会","suggested_time":"${tomorrow}T15:00:00$offset","reason":"明天下午3点"}]}
-
-当前时间：${_formatDateTime(now)} ($weekday)
-时区：$timezone
-
-【输出】只输出纯 JSON，勿用 Markdown 代码块。
-{"reminders":[{"title":"简短标题","suggested_time":"ISO8601+偏移","reason":"简短依据"}]}
-
-【规则】
-1. 只提取未来、明确的提醒；无则返回 {"reminders": []}
-2. "今天X点"若已早于当前时刻则改为"明天X点"；缺少年份默认今年
-3. 标题简洁（≤30字），如"买菜"、"回电话给张三"
-''';
   }
 
   /// Formats as `YYYY-MM-DD` (date only, no time).

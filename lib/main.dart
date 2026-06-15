@@ -130,35 +130,38 @@ void _handleNotificationAction(NotificationResponse response) {
   if (action == null || reminderId == null || reminderId.isEmpty) return;
   final navigatorContext = rootNavigatorKey.currentContext;
   if (navigatorContext == null) return;
-  final reminders = Provider.of<RemindersViewModel>(
-    navigatorContext,
-    listen: false,
-  );
-  final settings = Provider.of<SettingsViewModel>(
-    navigatorContext,
-    listen: false,
-  );
-  final messenger = ScaffoldMessenger.of(navigatorContext);
-  switch (action) {
-    case NotificationService.kSnoozeActionId:
-      unawaited(
-        reminders.snoozeReminder(
-          reminderId,
-          settings.settings.snoozeDuration.duration,
-        ),
-      );
-      break;
-    case NotificationService.kCompleteActionId:
-      // "完成" in v1.3.0 is a soft delete: the reminder moves to the
-      // trash and can be restored from the trash page if the user
-      // changed their mind. The previous behaviour was a permanent
-      // delete, but the trash makes that strictly less convenient and
-      // strictly more reversible.
-      unawaited(reminders.softDelete(reminderId));
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('已移入回收站')));
-      break;
+  try {
+    final reminders = Provider.of<RemindersViewModel>(
+      navigatorContext,
+      listen: false,
+    );
+    final settings = Provider.of<SettingsViewModel>(
+      navigatorContext,
+      listen: false,
+    );
+    final messenger = ScaffoldMessenger.of(navigatorContext);
+    switch (action) {
+      case NotificationService.kSnoozeActionId:
+        unawaited(
+          reminders.snoozeReminder(
+            reminderId,
+            settings.settings.snoozeDuration.duration,
+          ),
+        );
+        break;
+      case NotificationService.kCompleteActionId:
+        unawaited(reminders.softDelete(reminderId));
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('已移入回收站')));
+        break;
+    }
+  } on Exception catch (error, stackTrace) {
+    developer.log(
+      'Failed to handle notification action',
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 }
 

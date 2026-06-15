@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 /// Full-page release notes reachable from
 /// `设置 → 关于 → 更新日志`. Renders a hero block at the top announcing
@@ -36,6 +37,14 @@ class ChangelogPage extends StatelessWidget {
                 isLatest: i == 0,
                 onCopy: () => _copyOne(context, _changelog[i]),
               ),
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => context.push('/settings/changelog/history'),
+                icon: const Icon(Icons.history),
+                label: Text('查看历史版本 (${_changelogHistory.length})'),
+              ),
+            ),
             const SizedBox(height: 24),
           ],
         ),
@@ -44,11 +53,69 @@ class ChangelogPage extends StatelessWidget {
   }
 
   Future<void> _copyAll(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: _formatAllForClipboard()));
+    await Clipboard.setData(
+      ClipboardData(text: _formatListForClipboard(_changelog)),
+    );
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('已复制全部版本')));
+  }
+
+  Future<void> _copyOne(BuildContext context, _ChangelogVersion v) async {
+    await Clipboard.setData(ClipboardData(text: _formatForClipboard(v)));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('已复制 v${v.version}')));
+  }
+}
+
+/// History subpage. Mirrors [ChangelogPage] but renders the older
+/// versions list (1.2.x and below). The hero block is intentionally
+/// omitted — there is no "latest" concept on this page; every entry is
+/// historical. The "复制全部" button copies the history list only.
+class ChangelogHistoryPage extends StatelessWidget {
+  const ChangelogHistoryPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('历史版本'),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.content_copy),
+            tooltip: '复制全部',
+            onPressed: () => _copyAll(context),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: <Widget>[
+            for (final v in _changelogHistory)
+              _ChangelogEntry(
+                entry: v,
+                isLatest: false,
+                onCopy: () => _copyOne(context, v),
+              ),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _copyAll(BuildContext context) async {
+    await Clipboard.setData(
+      ClipboardData(text: _formatListForClipboard(_changelogHistory)),
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('已复制全部历史版本')));
   }
 
   Future<void> _copyOne(BuildContext context, _ChangelogVersion v) async {
@@ -250,9 +317,23 @@ class _ChangelogVersion {
   final List<String> notes;
 }
 
-/// Newest-first list of human-facing release notes. Edit this list when
-/// shipping a new version; the rest of the page renders from here.
+/// Newest-first list of human-facing release notes for the *current*
+/// major series (1.3.x). Edit this list when shipping a new 1.3.x patch;
+/// when graduating to 1.4 the policy is to move the 1.3.x entries
+/// into [_changelogHistory] manually (see the "查看历史版本" entry point
+/// on the main page).
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
+  _ChangelogVersion(
+    version: '1.3.1',
+    notes: <String>[
+      '修复滑动删除提醒时产生 Flutter framework 错误日志的问题',
+      '新增「错误日志 AI 分析」: 设置 → 关于 → 错误日志,每条错误可一键调 AI 给出诊断与排查建议',
+      '新增「AI 提示词自定义」: 设置 → AI 助手 → 提示词,可改写「提醒提取 / 文本润色 / 错误分析」三段 prompt,留空或点击"恢复默认"即用内置 prompt',
+      '默认打开本地中文 OCR(已升级的旧用户保持原状)',
+      'AI 助手及其子页面布局拉宽,与其他设置页对齐',
+      '更新日志主页只显示 1.3.x 系列,旧版本归入「查看历史版本」子页',
+    ],
+  ),
   _ChangelogVersion(
     version: '1.3.0',
     notes: <String>[
@@ -262,6 +343,12 @@ const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
       '备份导出不再包含已删除的提醒',
     ],
   ),
+];
+
+/// Versions retired from the main changelog page. They still ship with
+/// the app and are reachable via the "查看历史版本" button. Kept in the
+/// same newest-first ordering for visual consistency.
+const List<_ChangelogVersion> _changelogHistory = <_ChangelogVersion>[
   _ChangelogVersion(
     version: '1.2.6',
     notes: <String>[
@@ -333,6 +420,6 @@ String _formatForClipboard(_ChangelogVersion v) {
   return buffer.toString().trimRight();
 }
 
-String _formatAllForClipboard() {
-  return _changelog.map(_formatForClipboard).join('\n\n');
+String _formatListForClipboard(List<_ChangelogVersion> list) {
+  return list.map(_formatForClipboard).join('\n\n');
 }

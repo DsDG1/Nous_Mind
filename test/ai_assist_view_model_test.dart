@@ -26,6 +26,7 @@ class _ScriptedAnalyzer implements AiAnalyzer {
   int _index = 0;
   int callCount = 0;
   int polishCallCount = 0;
+  int errorAnalysisCallCount = 0;
 
   @override
   Future<List<ReminderDraft>> analyze({
@@ -34,6 +35,7 @@ class _ScriptedAnalyzer implements AiAnalyzer {
     required String apiKey,
     required String timezone,
     required DateTime now,
+    String? systemPromptTemplate,
   }) async {
     callCount++;
     if (_index >= _responses.length) {
@@ -49,8 +51,19 @@ class _ScriptedAnalyzer implements AiAnalyzer {
   Future<String> polishText({
     required String text,
     required String apiKey,
+    String? systemPrompt,
   }) async {
     polishCallCount++;
+    return text;
+  }
+
+  @override
+  Future<String> analyzeError({
+    required String text,
+    required String apiKey,
+    String? systemPrompt,
+  }) async {
+    errorAnalysisCallCount++;
     return text;
   }
 

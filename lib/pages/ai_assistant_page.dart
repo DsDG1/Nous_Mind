@@ -124,6 +124,7 @@ class _AiAssistantPageState extends State<AiAssistantPage> {
         text: text.isEmpty ? null : text,
         imagePath: _imagePath,
         now: DateTime.now(),
+        systemPromptTemplate: settings.aiAssistantPrompt,
       );
     } catch (error, stackTrace) {
       developer.log(

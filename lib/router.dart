@@ -9,6 +9,7 @@ import 'pages/inspiration_editor_page.dart';
 import 'pages/inspirations_home_page.dart';
 import 'pages/reminder_editor_page.dart';
 import 'pages/reminders_home_page.dart';
+import 'pages/settings/ai_prompts_settings_page.dart';
 import 'pages/settings/ai_settings_page.dart';
 import 'pages/settings/appearance_settings_page.dart';
 import 'pages/settings/changelog_page.dart';
@@ -150,11 +151,22 @@ final GoRouter router = GoRouter(
                       path: 'local-ocr',
                       builder: (context, state) => const LocalOcrSettingsPage(),
                     ),
+                    GoRoute(
+                      path: 'prompts',
+                      builder: (context, state) =>
+                          const AiPromptsSettingsPage(),
+                    ),
                   ],
                 ),
                 GoRoute(
                   path: 'changelog',
                   builder: (context, state) => const ChangelogPage(),
+                  routes: <RouteBase>[
+                    GoRoute(
+                      path: 'history',
+                      builder: (context, state) => const ChangelogHistoryPage(),
+                    ),
+                  ],
                 ),
                 GoRoute(
                   path: 'about',

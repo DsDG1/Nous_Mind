@@ -143,7 +143,10 @@ class AppSettings {
     this.autoDeleteAfter24h = true,
     this.aiAssistantEnabled = false,
     this.aiApiKey,
-    this.chineseOcrEnabled = false,
+    this.chineseOcrEnabled = true,
+    this.aiAssistantPrompt,
+    this.aiPolishPrompt,
+    this.aiErrorAnalysisPrompt,
   });
 
   final ThemeMode themeMode;
@@ -180,6 +183,24 @@ class AppSettings {
   /// the Chinese model is missing or fails.
   final bool chineseOcrEnabled;
 
+  /// User-customized system prompt template for the AI assistant's
+  /// reminder-extraction flow. `null` (the default) means use the
+  /// built-in template (`DeepSeekAnalyzer.defaultAssistantPromptTemplate`).
+  /// The template may contain the placeholders `{{now}}`, `{{timezone}}`,
+  /// `{{offset}}`, `{{weekday}}`, `{{tomorrow}}` which are substituted
+  /// per request.
+  final String? aiAssistantPrompt;
+
+  /// User-customized system prompt for the "AI 一键润色" flow. `null`
+  /// means use `DeepSeekAnalyzer.defaultPolishPrompt`. No template
+  /// variables — sent verbatim.
+  final String? aiPolishPrompt;
+
+  /// User-customized system prompt for the "错误日志 → AI 分析" flow.
+  /// `null` means use `DeepSeekAnalyzer.defaultErrorAnalysisPrompt`.
+  /// No template variables — sent verbatim.
+  final String? aiErrorAnalysisPrompt;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     AppSeedColor? seedColor,
@@ -191,6 +212,12 @@ class AppSettings {
     bool? aiAssistantEnabled,
     String? aiApiKey,
     bool? chineseOcrEnabled,
+    String? aiAssistantPrompt,
+    bool clearAiAssistantPrompt = false,
+    String? aiPolishPrompt,
+    bool clearAiPolishPrompt = false,
+    String? aiErrorAnalysisPrompt,
+    bool clearAiErrorAnalysisPrompt = false,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -203,6 +230,15 @@ class AppSettings {
       aiAssistantEnabled: aiAssistantEnabled ?? this.aiAssistantEnabled,
       aiApiKey: aiApiKey ?? this.aiApiKey,
       chineseOcrEnabled: chineseOcrEnabled ?? this.chineseOcrEnabled,
+      aiAssistantPrompt: clearAiAssistantPrompt
+          ? null
+          : (aiAssistantPrompt ?? this.aiAssistantPrompt),
+      aiPolishPrompt: clearAiPolishPrompt
+          ? null
+          : (aiPolishPrompt ?? this.aiPolishPrompt),
+      aiErrorAnalysisPrompt: clearAiErrorAnalysisPrompt
+          ? null
+          : (aiErrorAnalysisPrompt ?? this.aiErrorAnalysisPrompt),
     );
   }
 
@@ -217,6 +253,10 @@ class AppSettings {
     'ai_assistant_enabled': aiAssistantEnabled,
     if (aiApiKey != null) 'ai_api_key': aiApiKey,
     'chinese_ocr_enabled': chineseOcrEnabled,
+    if (aiAssistantPrompt != null) 'ai_assistant_prompt': aiAssistantPrompt,
+    if (aiPolishPrompt != null) 'ai_polish_prompt': aiPolishPrompt,
+    if (aiErrorAnalysisPrompt != null)
+      'ai_error_analysis_prompt': aiErrorAnalysisPrompt,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -255,12 +295,17 @@ class AppSettings {
       ),
       autoDeleteAfter24h: (json['auto_delete_after_24h'] as bool?) ?? true,
       aiAssistantEnabled: (json['ai_assistant_enabled'] as bool?) ?? false,
-      aiApiKey: _normalizeApiKey(json['ai_api_key']),
-      chineseOcrEnabled: (json['chinese_ocr_enabled'] as bool?) ?? false,
+      aiApiKey: _normalizeOptionalString(json['ai_api_key']),
+      chineseOcrEnabled: (json['chinese_ocr_enabled'] as bool?) ?? true,
+      aiAssistantPrompt: _normalizeOptionalString(json['ai_assistant_prompt']),
+      aiPolishPrompt: _normalizeOptionalString(json['ai_polish_prompt']),
+      aiErrorAnalysisPrompt: _normalizeOptionalString(
+        json['ai_error_analysis_prompt'],
+      ),
     );
   }
 
-  static String? _normalizeApiKey(Object? value) {
+  static String? _normalizeOptionalString(Object? value) {
     if (value is! String) return null;
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;

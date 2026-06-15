@@ -113,12 +113,12 @@ class RemindersViewModel extends ChangeNotifier {
   /// trash page; intentionally not cached on the view model because
   /// the page is the only consumer and the list can be large.
   /// The cached [trashCount] is refreshed as a side effect so the
-  /// data-settings tile does not show a stale value while the user
-  /// is on the trash page.
+  /// data-settings tile does not show stale values while the user
+  /// is on the trash page. Does not call [notifyListeners] because
+  /// the trash page uses [FutureBuilder], not [Consumer].
   Future<List<Reminder>> refreshAndFetchTrash() async {
     final items = await _repository.getAllTrash();
     _trashCount = items.length;
-    notifyListeners();
     return items;
   }
 
@@ -160,8 +160,8 @@ class RemindersViewModel extends ChangeNotifier {
       return;
     }
     _reminders[index] = reminder;
-    await _repository.update(reminder);
     notifyListeners();
+    await _repository.update(reminder);
     await _notifications.cancelReminder(reminder.id);
     await _safeSchedule(reminder);
     _scheduleNearestTimer();
@@ -178,15 +178,15 @@ class RemindersViewModel extends ChangeNotifier {
     if (index == -1) {
       return;
     }
-    final reminder = _reminders[index];
-    final deleted = reminder.copyWith(
-      isDeleted: true,
-      deletedAt: now ?? DateTime.now(),
-    );
-    _reminders[index] = deleted;
-    await _repository.softDelete(id, deleted.deletedAt!);
+    final deletedAt = now ?? DateTime.now();
+    _reminders.removeAt(index);
     _trashCount += 1;
+    // Notify before the DB write so the Consumer rebuilds in the same frame
+    // as the Dismissible's onDismissed callback. Otherwise the await below
+    // delays the rebuild past the framework's assertion check, producing
+    // "A dismissed Dismissible widget is still part of the tree".
     notifyListeners();
+    await _repository.softDelete(id, deletedAt);
     try {
       await _notifications.cancelReminder(id);
     } on Exception catch (error, stackTrace) {
@@ -205,27 +205,44 @@ class RemindersViewModel extends ChangeNotifier {
   /// notification schedule (the next 24h auto-delete sweep will pick
   /// them up if the user has that preference on).
   Future<void> restore(String id) async {
-    // Refresh from the database in case the in-memory cache is stale
-    // (e.g. the user re-launched the app while a trashed row existed).
-    final trashed = await _repository.getAllTrash();
-    final original = trashed.where((r) => r.id == id).firstOrNull;
-    if (original == null) {
-      // Fall back to a minimal restore if the row vanished (e.g. it
-      // was purged between page-open and tap).
-      return;
-    }
+    final original = await _repository.findById(id);
+    if (original == null) return;
     final restored = original.copyWith(isDeleted: false, clearDeletedAt: true);
+    _reminders.removeWhere((r) => r.id == id);
     _reminders.insert(0, restored);
-    // Keep the existing sort (newest created first) stable; resorting
-    // would only matter for the top of the list and the user just
-    // re-created the row, so a leading position is acceptable.
-    await _repository.restore(id);
     _trashCount = (_trashCount - 1).clamp(0, 1 << 30);
     notifyListeners();
+    await _repository.restore(id);
     if (restored.reminderTime.isAfter(DateTime.now())) {
       await _safeSchedule(restored);
     }
     _scheduleNearestTimer();
+  }
+
+  /// Batch-restores multiple trashed reminders via a single SQL pass.
+  /// Used by the trash page's "全部恢复" action and the data-settings
+  /// "撤销" button so the UI does not freeze when restoring many items.
+  Future<int> restoreAll(List<String> ids) async {
+    if (ids.isEmpty) return 0;
+    final trashed = await _repository.getAllTrash();
+    final toRestore = <Reminder>[];
+    for (final r in trashed) {
+      if (ids.contains(r.id)) {
+        toRestore.add(r.copyWith(isDeleted: false, clearDeletedAt: true));
+      }
+    }
+    if (toRestore.isEmpty) return 0;
+    _reminders.removeWhere((r) => ids.contains(r.id));
+    _reminders.insertAll(0, toRestore);
+    _trashCount = (_trashCount - toRestore.length).clamp(0, 1 << 30);
+    notifyListeners();
+    await _repository.restoreByIds(ids);
+    final now = DateTime.now();
+    await Future.wait(
+      toRestore.where((r) => r.reminderTime.isAfter(now)).map(_safeSchedule),
+    );
+    _scheduleNearestTimer();
+    return toRestore.length;
   }
 
   /// Moves every active reminder to the trash in one pass. Used by
@@ -238,23 +255,23 @@ class RemindersViewModel extends ChangeNotifier {
     if (_reminders.isEmpty) return 0;
     final now = DateTime.now();
     final toTrash = List<Reminder>.from(_reminders);
-    for (final r in toTrash) {
-      final stamped = r.copyWith(isDeleted: true, deletedAt: now);
-      final i = _reminders.indexWhere((e) => e.id == r.id);
-      if (i != -1) _reminders[i] = stamped;
-      await _repository.softDelete(r.id, now);
-      try {
-        await _notifications.cancelReminder(r.id);
-      } on Exception catch (error, stackTrace) {
-        developer.log(
-          'Failed to cancel notification during clearAllToTrash',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
+    _reminders.clear();
     _trashCount += toTrash.length;
     notifyListeners();
+    for (final r in toTrash) {
+      await _repository.softDelete(r.id, now);
+    }
+    try {
+      await Future.wait(
+        toTrash.map((r) => _notifications.cancelReminder(r.id)),
+      );
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to cancel some notifications during clearAllToTrash',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     _scheduleNearestTimer();
     return toTrash.length;
   }
@@ -268,8 +285,9 @@ class RemindersViewModel extends ChangeNotifier {
   Future<int> purgeTrash() async {
     final trashed = await _repository.getAllTrash();
     if (trashed.isEmpty) return 0;
+    final ids = trashed.map((r) => r.id).toList();
+    await _repository.permanentDeleteByIds(ids);
     for (final r in trashed) {
-      await _repository.permanentDelete(r.id);
       final imagePath = r.imagePath;
       if (imagePath != null) {
         try {
@@ -327,8 +345,8 @@ class RemindersViewModel extends ChangeNotifier {
       reminderTime: DateTime.now().add(duration),
     );
     _reminders[index] = snoozed;
-    await _repository.update(snoozed);
     notifyListeners();
+    await _repository.update(snoozed);
     await _notifications.cancelReminder(id);
     await _safeSchedule(snoozed);
     _scheduleNearestTimer();
@@ -424,16 +442,18 @@ class RemindersViewModel extends ChangeNotifier {
   /// untouched — the user has already moved them aside.
   Future<int> clearAll() async {
     final all = List<Reminder>.from(_reminders);
+    _reminders.clear();
+    notifyListeners();
+    try {
+      await Future.wait(all.map((r) => _notifications.cancelReminder(r.id)));
+    } on Exception catch (error, stackTrace) {
+      developer.log(
+        'Failed to cancel some notifications during clearAll',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     for (final reminder in all) {
-      try {
-        await _notifications.cancelReminder(reminder.id);
-      } on Exception catch (error, stackTrace) {
-        developer.log(
-          'Failed to cancel notification during clearAll',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
       final imagePath = reminder.imagePath;
       if (imagePath != null) {
         try {
@@ -448,8 +468,6 @@ class RemindersViewModel extends ChangeNotifier {
       }
     }
     final removed = await _repository.clearAll();
-    _reminders.clear();
-    notifyListeners();
     _scheduleNearestTimer();
     return removed;
   }
