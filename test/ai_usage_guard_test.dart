@@ -1,52 +1,14 @@
 import 'package:clock/clock.dart';
-import 'package:nousmind/models/app_settings.dart';
-import 'package:nousmind/services/ai_usage_guard.dart';
-import 'package:nousmind/services/settings_repository.dart';
-import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// In-memory [SettingsRepository] so the view model can persist without
-/// touching sqflite. Implements only the surface that
-/// [SettingsViewModel] actually uses; the test never touches real disk.
-class _MemorySettingsRepository implements SettingsRepository {
-  AppSettings stored;
+import 'package:nousmind/services/ai_usage_guard.dart';
 
-  _MemorySettingsRepository([AppSettings? initial])
-      : stored = initial ?? const AppSettings();
-
-  @override
-  Future<AppSettings> load() async => stored;
-
-  @override
-  Future<void> save(AppSettings settings) async {
-    stored = settings;
-  }
-}
-
-SettingsViewModel _makeVm({
-  int aiDailyLimit = 3,
-  bool aiDailyLimitEnabled = true,
-  int aiCallsToday = 0,
-  DateTime? aiCallsResetAt,
-}) {
-  final repo = _MemorySettingsRepository(
-    AppSettings(
-      aiDailyLimit: aiDailyLimit,
-      aiDailyLimitEnabled: aiDailyLimitEnabled,
-      aiCallsToday: aiCallsToday,
-      aiCallsResetAt: aiCallsResetAt,
-    ),
-  );
-  return SettingsViewModel(
-    repository: repo,
-    initialSettings: repo.stored,
-  );
-}
+import 'helpers/fakes.dart';
 
 void main() {
   group('AiUsageGuard.tryAcquire', () {
     test('returns allowed when under the limit and never called', () {
-      final vm = _makeVm(aiDailyLimit: 3, aiCallsToday: 0);
+      final vm = makeSettingsVm(aiDailyLimit: 3, aiCallsToday: 0);
       final guard = AiUsageGuard(settings: vm);
 
       final result = guard.tryAcquire();
@@ -55,7 +17,7 @@ void main() {
     });
 
     test('returns cooldown inside the in-process window', () {
-      final vm = _makeVm(aiDailyLimit: 3);
+      final vm = makeSettingsVm(aiDailyLimit: 3);
       final guard = AiUsageGuard(
         settings: vm,
         cooldown: const Duration(seconds: 10),
@@ -75,7 +37,7 @@ void main() {
     });
 
     test('cooldown clears once the window elapses', () {
-      final vm = _makeVm(aiDailyLimit: 3);
+      final vm = makeSettingsVm(aiDailyLimit: 3);
       final guard = AiUsageGuard(
         settings: vm,
         cooldown: const Duration(seconds: 10),
@@ -92,7 +54,7 @@ void main() {
     });
 
     test('returns daily limit when usage reaches the ceiling', () {
-      final vm = _makeVm(aiDailyLimit: 2, aiCallsToday: 2);
+      final vm = makeSettingsVm(aiDailyLimit: 2, aiCallsToday: 2);
       final guard = AiUsageGuard(settings: vm);
 
       final verdict = guard.tryAcquire();
@@ -104,7 +66,7 @@ void main() {
       // Stored "yesterday" but the counter says 5 used. Guard must
       // pretend today is fresh and allow the call.
       final yesterday = DateTime.now().subtract(const Duration(days: 1));
-      final vm = _makeVm(
+      final vm = makeSettingsVm(
         aiDailyLimit: 3,
         aiCallsToday: 5,
         aiCallsResetAt: yesterday,
@@ -117,7 +79,7 @@ void main() {
     });
 
     test('skips the ceiling check when the quota switch is off', () {
-      final vm = _makeVm(
+      final vm = makeSettingsVm(
         aiDailyLimit: 50,
         aiDailyLimitEnabled: false,
         aiCallsToday: 999,
@@ -132,7 +94,7 @@ void main() {
     });
 
     test('ceiling kicks in again when the switch flips back on', () async {
-      final vm = _makeVm(
+      final vm = makeSettingsVm(
         aiDailyLimit: 50,
         aiDailyLimitEnabled: false,
         aiCallsToday: 999,
@@ -147,7 +109,7 @@ void main() {
 
   group('AiUsageGuard.recordSuccess', () {
     test('increments the persisted counter via the view model', () async {
-      final vm = _makeVm(aiDailyLimit: 3, aiCallsToday: 0);
+      final vm = makeSettingsVm(aiDailyLimit: 3, aiCallsToday: 0);
       final guard = AiUsageGuard(settings: vm);
 
       await guard.recordSuccess();
@@ -158,7 +120,7 @@ void main() {
 
     test('reset to 1 on a stale resetAt instead of incrementing', () async {
       final yesterday = DateTime.now().subtract(const Duration(days: 1));
-      final vm = _makeVm(
+      final vm = makeSettingsVm(
         aiDailyLimit: 3,
         aiCallsToday: 7,
         aiCallsResetAt: yesterday,
@@ -173,7 +135,7 @@ void main() {
 
   group('AiUsageGuard + resetAiUsage', () {
     test('reset clears the counter regardless of switch state', () async {
-      final vm = _makeVm(
+      final vm = makeSettingsVm(
         aiDailyLimit: 50,
         aiDailyLimitEnabled: false,
         aiCallsToday: 7,

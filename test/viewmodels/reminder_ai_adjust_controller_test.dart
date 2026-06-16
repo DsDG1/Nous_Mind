@@ -1,27 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/models/reminder_draft.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
-import 'package:nousmind/services/settings_repository.dart';
 import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 
-/// In-memory [SettingsRepository] for tests. Mirrors the helper in
-/// `ai_usage_guard_test.dart` so the persistence path stays
-/// non-flaky without touching sqflite.
-class _MemorySettingsRepository implements SettingsRepository {
-  AppSettings stored;
-  _MemorySettingsRepository([AppSettings? initial])
-      : stored = initial ?? const AppSettings();
-  @override
-  Future<AppSettings> load() async => stored;
-  @override
-  Future<void> save(AppSettings settings) async {
-    stored = settings;
-  }
-}
+import '../helpers/fakes.dart';
 
 /// Hand-rolled fake for [AiAnalyzer]. Counts how many times the
 /// adjust endpoint was hit so tests can assert the controller
@@ -82,21 +67,14 @@ SettingsViewModel _makeVm({
   int aiDailyLimit = 3,
   bool aiDailyLimitEnabled = true,
   int aiCallsToday = 0,
-}) {
-  final repo = _MemorySettingsRepository(
-    AppSettings(
+}) =>
+    makeSettingsVm(
       aiAssistantEnabled: aiEnabled,
       aiApiKey: apiKey,
       aiDailyLimit: aiDailyLimit,
       aiDailyLimitEnabled: aiDailyLimitEnabled,
       aiCallsToday: aiCallsToday,
-    ),
-  );
-  return SettingsViewModel(
-    repository: repo,
-    initialSettings: repo.stored,
-  );
-}
+    );
 
 /// Drives [ReminderAiAdjustController.adjust] end-to-end with
 /// scripted user responses. The auto-respond happens inside the
