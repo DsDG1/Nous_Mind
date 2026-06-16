@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/router.dart';
 import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/reminder_popup.dart';
 import 'package:nousmind/widgets/settings_section.dart';
@@ -130,9 +131,7 @@ class NotificationSettingsPage extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     final granted = await service.requestPermissions();
     if (!granted) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text(_permissionDeniedMessage)));
+      messenger.showAppSnackBar(_permissionDeniedMessage);
       return;
     }
     await service.showImmediate(
@@ -140,9 +139,7 @@ class NotificationSettingsPage extends StatelessWidget {
       body: _testBody,
       vibrationEnabled: vm.settings.vibrationEnabled,
     );
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text(_sentMessage)));
+    messenger.showAppSnackBar(_sentMessage);
     final navigatorState = rootNavigatorKey.currentState;
     if (navigatorState != null) {
       await showReminderPopup(

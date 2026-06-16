@@ -14,6 +14,7 @@ import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
 import 'package:nousmind/utils/date_format.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
@@ -102,9 +103,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     } on PlatformException catch (error, stackTrace) {
       developer.log('Image pick failed', error: error, stackTrace: stackTrace);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('获取图片失败')));
+      context.showAppSnackBar('获取图片失败');
     } finally {
       if (mounted) setState(() => _picking = false);
     }
@@ -188,9 +187,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     if (!mounted) return;
     switch (event) {
       case ShowSnackBarEvent(:final message):
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text(message)));
+        context.showAppSnackBar(message);
       case ApplyDraftEvent(
         :final title,
         :final description,

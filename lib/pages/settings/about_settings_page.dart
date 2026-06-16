@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/error_log_service.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/error_analysis_sheet.dart';
 import 'package:nousmind/widgets/settings_section.dart';
@@ -146,9 +147,7 @@ class _VersionSection extends StatelessWidget {
   Future<void> _copyToClipboard(BuildContext context, String value) async {
     await Clipboard.setData(ClipboardData(text: value));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制')));
+    context.showAppSnackBar('已复制');
   }
 
   void _showLicenses(BuildContext context) {
@@ -248,9 +247,7 @@ class _ErrorLogSection extends StatelessWidget {
     final text = await compute(_formatLogEntries, entries);
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('日志已复制')));
+    context.showAppSnackBar('日志已复制');
   }
 
   Future<void> _confirmClear(BuildContext context, ErrorLogService log) async {
@@ -311,13 +308,8 @@ class _ErrorEntryCard extends StatelessWidget {
 
   Future<void> _runAiAnalysis(BuildContext context) async {
     final settings = context.read<SettingsViewModel>().settings;
-    final messenger = ScaffoldMessenger.of(context);
     if (!settings.aiAssistantEnabled || settings.aiApiKey == null) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('请先在 设置 → AI 助手 配置 DeepSeek')),
-        );
+      context.showAppSnackBar('请先在 设置 → AI 助手 配置 DeepSeek');
       return;
     }
     await ErrorAnalysisSheet.show(

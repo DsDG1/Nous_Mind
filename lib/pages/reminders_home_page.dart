@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:nousmind/models/reminder.dart';
 import 'package:nousmind/services/app_settings_bridge.dart';
 import 'package:nousmind/services/calendar_service.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/widgets/empty_state.dart';
 import 'package:nousmind/widgets/reminder_list_item.dart';
@@ -48,18 +49,14 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     await viewModel.softDelete(reminder.id);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('已移入回收站「${reminder.title}」'),
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: '撤销',
-            onPressed: () => viewModel.restore(reminder.id),
-          ),
-        ),
-      );
+    messenger.showAppSnackBar(
+      '已移入回收站「${reminder.title}」',
+      duration: const Duration(seconds: 5),
+      action: SnackBarAction(
+        label: '撤销',
+        onPressed: () => viewModel.restore(reminder.id),
+      ),
+    );
   }
 
   Future<void> _addToCalendarWithFeedback(Reminder reminder) async {
@@ -67,17 +64,13 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     final granted = await _calendar.requestPermissions();
     if (!granted) {
       if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: const Text('未授予日历写入权限'),
-            action: SnackBarAction(
-              label: '去设置',
-              onPressed: _appSettings.openAppSettings,
-            ),
-          ),
-        );
+      messenger.showAppSnackBar(
+        '未授予日历写入权限',
+        action: SnackBarAction(
+          label: '去设置',
+          onPressed: _appSettings.openAppSettings,
+        ),
+      );
       return;
     }
     final result = await _calendar.addReminder(reminder);
@@ -88,9 +81,7 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       CalendarAddResult.noWritableCalendar => '没有可写入的日历，请检查日历权限',
       CalendarAddResult.writeFailed => '写入日历失败，请稍后重试',
     };
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    messenger.showAppSnackBar(message);
   }
 
   @override

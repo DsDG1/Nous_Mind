@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:nousmind/utils/snackbar_x.dart';
+
 /// Full-page release notes reachable from
 /// `设置 → 关于 → 更新日志`. Renders a hero block at the top announcing
 /// the latest version, followed by a card per release, newest first.
@@ -57,17 +59,13 @@ class ChangelogPage extends StatelessWidget {
       ClipboardData(text: _formatListForClipboard(_changelog)),
     );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已复制全部版本')));
+    context.showAppSnackBar('已复制全部版本');
   }
 
   Future<void> _copyOne(BuildContext context, _ChangelogVersion v) async {
     await Clipboard.setData(ClipboardData(text: _formatForClipboard(v)));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已复制 v${v.version}')));
+    context.showAppSnackBar('已复制 v${v.version}');
   }
 }
 
@@ -113,17 +111,13 @@ class ChangelogHistoryPage extends StatelessWidget {
       ClipboardData(text: _formatListForClipboard(_changelogHistory)),
     );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已复制全部历史版本')));
+    context.showAppSnackBar('已复制全部历史版本');
   }
 
   Future<void> _copyOne(BuildContext context, _ChangelogVersion v) async {
     await Clipboard.setData(ClipboardData(text: _formatForClipboard(v)));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已复制 v${v.version}')));
+    context.showAppSnackBar('已复制 v${v.version}');
   }
 }
 

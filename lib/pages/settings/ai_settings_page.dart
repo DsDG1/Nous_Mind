@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/services/chinese_ocr_installer.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 
@@ -386,11 +387,7 @@ class _AiUsageCard extends StatelessWidget {
                     onPressed: () async {
                       await vm.resetAiUsage();
                       if (!context.mounted) return;
-                      ScaffoldMessenger.of(context)
-                        ..hideCurrentSnackBar()
-                        ..showSnackBar(
-                          const SnackBar(content: Text('今日用量已重置')),
-                        );
+                      context.showAppSnackBar('今日用量已重置');
                     },
                     icon: const Icon(Icons.refresh),
                     label: const Text('重置今日用量'),

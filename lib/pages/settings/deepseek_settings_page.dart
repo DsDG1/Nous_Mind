@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 
@@ -44,18 +45,14 @@ class _DeepSeekSettingsPageState extends State<DeepSeekSettingsPage> {
   Future<void> _save(BuildContext context, SettingsViewModel vm) async {
     await vm.setAiApiKey(_controller.text);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已保存')));
+    context.showAppSnackBar('已保存');
   }
 
   Future<void> _clear(BuildContext context, SettingsViewModel vm) async {
     _controller.clear();
     await vm.setAiApiKey(null);
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已清除')));
+    context.showAppSnackBar('已清除');
   }
 
   Future<void> _openTutorial() async {
@@ -64,9 +61,7 @@ class _DeepSeekSettingsPageState extends State<DeepSeekSettingsPage> {
       mode: LaunchMode.externalApplication,
     );
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('无法打开浏览器')));
+      context.showAppSnackBar('无法打开浏览器');
     }
   }
 

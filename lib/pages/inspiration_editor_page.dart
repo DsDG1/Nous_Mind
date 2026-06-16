@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/inspiration.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/widgets/image_preview.dart';
 import 'package:nousmind/widgets/image_preview_screen.dart';
@@ -78,9 +79,7 @@ class _InspirationEditorPageState extends State<InspirationEditorPage> {
       case _PickOutcome.selected:
         setState(() => _imagePath = result.file!.path);
       case _PickOutcome.failed:
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('获取图片失败')));
+        context.showAppSnackBar('获取图片失败');
     }
   }
 

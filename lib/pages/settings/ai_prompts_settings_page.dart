@@ -3,6 +3,7 @@ import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/services/ai_analyzer.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 
@@ -58,9 +59,7 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
   ) async {
     await setter(value);
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已保存')));
+    context.showAppSnackBar('已保存');
   }
 
   /// Pops a read-only dialog showing how the placeholder values will
@@ -128,9 +127,7 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
 
   void _notifyReset() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('已恢复默认')));
+    context.showAppSnackBar('已恢复默认');
   }
 
   @override

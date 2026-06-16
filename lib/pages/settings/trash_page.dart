@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/widgets/empty_state.dart';
 
@@ -68,9 +69,7 @@ class _TrashPageState extends State<TrashPage> {
     await _reload();
     if (!mounted) return;
     setState(() => _busy = false);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已永久删除 $removed 项')));
+    messenger.showAppSnackBar('已永久删除 $removed 项');
   }
 
   Future<void> _restoreAll() async {
@@ -82,9 +81,7 @@ class _TrashPageState extends State<TrashPage> {
     await _reload();
     if (!mounted) return;
     setState(() => _busy = false);
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('已恢复 $restored 项')));
+    messenger.showAppSnackBar('已恢复 $restored 项');
   }
 
   @override

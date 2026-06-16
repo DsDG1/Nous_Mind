@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:nousmind/services/backup_service.dart';
+import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
@@ -66,9 +67,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
         ),
       );
     } on Exception catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('导出失败: $error')));
+      messenger.showAppSnackBar('导出失败: $error');
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -100,24 +99,14 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       await inspirationsVm.refresh();
       unawaited(backup.refreshStats());
       if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              '已导入 ${result.remindersImported} 条提醒、'
-              '${result.inspirationsImported} 条灵感',
-            ),
-          ),
-        );
+      messenger.showAppSnackBar(
+        '已导入 ${result.remindersImported} 条提醒、'
+        '${result.inspirationsImported} 条灵感',
+      );
     } on FormatException catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('文件格式无效: ${error.message}')));
+      messenger.showAppSnackBar('文件格式无效: ${error.message}');
     } on Exception catch (error) {
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('导入失败: $error')));
+      messenger.showAppSnackBar('导入失败: $error');
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -161,26 +150,18 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       final moved = await remindersVm.clearAllToTrash();
       unawaited(backup.refreshStats());
       if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text('已移入回收站 $moved 条提醒'),
-            duration: const Duration(seconds: 5),
-            action: SnackBarAction(
-              label: '撤销',
-              onPressed: () async {
-                await remindersVm.restoreAll(snapshot);
-                if (!mounted) return;
-                messenger
-                  ..hideCurrentSnackBar()
-                  ..showSnackBar(
-                    SnackBar(content: Text('已恢复 ${snapshot.length} 条')),
-                  );
-              },
-            ),
-          ),
-        );
+      messenger.showAppSnackBar(
+        '已移入回收站 $moved 条提醒',
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () async {
+            await remindersVm.restoreAll(snapshot);
+            if (!mounted) return;
+            messenger.showAppSnackBar('已恢复 ${snapshot.length} 条');
+          },
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -203,9 +184,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       final removed = await inspirationsVm.clearAll();
       unawaited(backup.refreshStats());
       if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('已删除 $removed 条灵感')));
+      messenger.showAppSnackBar('已删除 $removed 条灵感');
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -230,9 +209,7 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
       final i = await inspirationsVm.clearAll();
       unawaited(backup.refreshStats());
       if (!mounted) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('已清空 ($r 条提醒, $i 条灵感)')));
+      messenger.showAppSnackBar('已清空 ($r 条提醒, $i 条灵感)');
     } finally {
       if (mounted) {
         setState(() => _busy = false);
