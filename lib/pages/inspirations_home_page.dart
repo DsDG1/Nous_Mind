@@ -93,13 +93,9 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
     final path = inspiration.imagePath;
     if (path == null) return;
     Navigator.of(context, rootNavigator: true).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierColor: Colors.black,
-        pageBuilder: (_, _, _) => ImagePreviewScreen(
-          imagePath: path,
-          heroTag: 'inspiration-thumb:${inspiration.id}',
-        ),
+      openImagePreviewRoute(
+        imagePath: path,
+        heroTag: 'inspiration-thumb:${inspiration.id}',
       ),
     );
   }

@@ -127,13 +127,9 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   void _openImagePreview() {
     if (_imagePath == null) return;
     Navigator.of(context, rootNavigator: true).push(
-      PageRouteBuilder<void>(
-        opaque: false,
-        barrierColor: Colors.black,
-        pageBuilder: (_, _, _) => ImagePreviewScreen(
-          imagePath: _imagePath!,
-          heroTag: _imageHeroTag(),
-        ),
+      openImagePreviewRoute(
+        imagePath: _imagePath!,
+        heroTag: _imageHeroTag(),
       ),
     );
   }

@@ -131,3 +131,22 @@ class _MissingImagePlaceholder extends StatelessWidget {
     );
   }
 }
+
+/// Returns the [PageRoute] used to push [ImagePreviewScreen] as a
+/// fullscreen overlay. The route is opaque on a black barrier so the
+/// transition feels like a sheet taking over the screen, and the call
+/// sites consistently push it onto the root navigator (so it sits
+/// above any tab bar).
+Route<void> openImagePreviewRoute({
+  required String imagePath,
+  required Object heroTag,
+}) {
+  return PageRouteBuilder<void>(
+    opaque: false,
+    barrierColor: Colors.black,
+    pageBuilder: (_, _, _) => ImagePreviewScreen(
+      imagePath: imagePath,
+      heroTag: heroTag,
+    ),
+  );
+}
