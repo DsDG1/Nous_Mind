@@ -48,14 +48,13 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   String _timezone = 'UTC';
 
   /// Reference to the AI flow controller supplied by the local
-  /// [ChangeNotifierProvider] in [build]. Stored on the state so
-  /// the state's `context` (which sits *above* that provider) can
-  /// still reach the controller for [_handleAiEvent].
+  /// [ChangeNotifierProvider] in [build]. The state's own `context`
+  /// sits *above* that provider, so [_AiControllerScope] hands the
+  /// controller back via a callback during its
+  /// `didChangeDependencies`. The field is kept for use by
+  /// [_runAiAdjust] and [_handleAiEvent], which run in callbacks
+  /// without a guaranteed [BuildContext].
   ReminderAiAdjustController? _aiController;
-
-  /// Subscription to the controller's event stream. Wired up on
-  /// the first build and torn down in [dispose].
-  StreamSubscription<AiAdjustEvent>? _aiEventSub;
 
   @override
   void initState() {
@@ -71,8 +70,6 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
 
   @override
   void dispose() {
-    _aiEventSub?.cancel();
-    _aiEventSub = null;
     _aiController = null;
     _titleController.dispose();
     _descriptionController.dispose();
@@ -377,9 +374,10 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   Widget build(BuildContext context) {
     // The AI flow controller is local to this page so it is disposed
     // automatically when the editor closes. The state's own
-    // `context` is *above* this provider, so the [Builder] below
-    // exposes a child context that can read it — and is also the
-    // hook for wiring the event subscription on the first build.
+    // `context` sits *above* this provider, so [_AiControllerScope]
+    // — a child [StatefulWidget] — reaches the controller from its
+    // own context, wires the event subscription once, and hands the
+    // reference back to this state via a callback.
     return ChangeNotifierProvider<ReminderAiAdjustController>(
       create: (ctx) => ReminderAiAdjustController(
         settings: ctx.read<SettingsViewModel>(),
@@ -388,14 +386,10 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         reminderAdder: (drafts) =>
             ctx.read<RemindersViewModel>().addMultiple(drafts),
       ),
-      child: Builder(
-        builder: (innerCtx) {
-          if (_aiController == null) {
-            _aiController = innerCtx.read<ReminderAiAdjustController>();
-            _aiEventSub = _aiController!.events.listen(_handleAiEvent);
-          }
-          return _buildScaffold(innerCtx);
-        },
+      child: _AiControllerScope(
+        onController: (controller) => _aiController = controller,
+        onEvent: _handleAiEvent,
+        child: _buildScaffold(context),
       ),
     );
   }
@@ -711,4 +705,51 @@ class _DraftTile extends StatelessWidget {
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
         '${two(dt.hour)}:${two(dt.minute)}';
   }
+}
+
+/// Owns the subscription lifecycle for the per-page
+/// [ReminderAiAdjustController]. Wires the controller's `events`
+/// stream exactly once via [State.didChangeDependencies] (guarded)
+/// and tears it down in [State.dispose]. The hosting state
+/// receives the controller reference via [onController] for use
+/// in callbacks that lack a guaranteed [BuildContext].
+class _AiControllerScope extends StatefulWidget {
+  const _AiControllerScope({
+    required this.onController,
+    required this.onEvent,
+    required this.child,
+  });
+
+  final void Function(ReminderAiAdjustController controller) onController;
+  final void Function(AiAdjustEvent event) onEvent;
+  final Widget child;
+
+  @override
+  State<_AiControllerScope> createState() => _AiControllerScopeState();
+}
+
+class _AiControllerScopeState extends State<_AiControllerScope> {
+  ReminderAiAdjustController? _controller;
+  StreamSubscription<AiAdjustEvent>? _sub;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_controller == null) {
+      _controller = context.read<ReminderAiAdjustController>();
+      _sub = _controller!.events.listen(widget.onEvent);
+      widget.onController(_controller!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _sub = null;
+    _controller = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
