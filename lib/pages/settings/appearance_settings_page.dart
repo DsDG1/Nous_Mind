@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/color_dot.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 
 /// Settings subpage for theme mode and accent (seed) color.
@@ -36,7 +37,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                     SettingsTile(
                       title: '主题色',
                       subtitle: appSeedColorLabel(settings.seedColor),
-                      leading: _ColorSwatch(color: settings.seedColor.color),
+                      leading: ColorDot(color: settings.seedColor.color),
                       onTap: () =>
                           _pickSeedColor(context, vm, settings.seedColor),
                     ),
@@ -104,7 +105,7 @@ class AppearanceSettingsPage extends StatelessWidget {
                   for (final color in AppSeedColor.values)
                     RadioListTile<AppSeedColor>(
                       title: Text(appSeedColorLabel(color)),
-                      secondary: _ColorSwatch(color: color.color),
+                      secondary: ColorDot(color: color.color),
                       value: color,
                     ),
                 ],
@@ -117,24 +118,5 @@ class AppearanceSettingsPage extends StatelessWidget {
     if (selected != null) {
       await vm.setSeedColor(selected);
     }
-  }
-}
-
-class _ColorSwatch extends StatelessWidget {
-  const _ColorSwatch({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black26),
-      ),
-    );
   }
 }

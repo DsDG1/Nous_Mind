@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/widgets/color_dot.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 import 'package:nousmind/widgets/settings_stats_card.dart';
 
@@ -31,7 +32,7 @@ class SettingsPage extends StatelessWidget {
                     SettingsTile(
                       title: '外观',
                       subtitle: _appearanceSubtitle(settings),
-                      leading: _SeedColorLeading(
+                      leading: ColorDot(
                         color: settings.seedColor.color,
                       ),
                       onTap: () => context.push('/settings/appearance'),
@@ -150,23 +151,4 @@ class _SettingsForSubtitle {
     aiAssistantEnabled,
     aiApiKey,
   );
-}
-
-class _SeedColorLeading extends StatelessWidget {
-  const _SeedColorLeading({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.black26),
-      ),
-    );
-  }
 }
