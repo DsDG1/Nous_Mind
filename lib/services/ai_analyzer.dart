@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 
 import 'package:nousmind/models/reminder_draft.dart';
+import 'package:nousmind/utils/date_format.dart';
 
 /// Abstract backend for the AI assistant. Implementations take free-form
 /// text and/or a local image path and return a list of [ReminderDraft]
@@ -212,7 +213,7 @@ requires.
     required DateTime now,
   }) {
     return template
-        .replaceAll('{{now}}', _formatDateTime(now))
+        .replaceAll('{{now}}', formatDateTime(now))
         .replaceAll('{{timezone}}', timezone)
         .replaceAll('{{offset}}', _formatOffset(now))
         .replaceAll('{{weekday}}', _weekdayLabel(now.weekday))
@@ -607,14 +608,6 @@ requires.
   static String _formatDate(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${dt.year}-${two(dt.month)}-${two(dt.day)}';
-  }
-
-  /// Formats the local clock as `YYYY-MM-DD HH:mm` (24h) so the model
-  /// sees the same date+time the user sees on their device.
-  static String _formatDateTime(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
   }
 
   /// Formats the device's current UTC offset as `+HH:MM` / `-HH:MM`,

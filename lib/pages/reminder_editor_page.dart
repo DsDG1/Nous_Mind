@@ -13,6 +13,7 @@ import 'package:nousmind/models/reminder_draft.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/utils/date_format.dart';
 import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
@@ -477,7 +478,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
                 child: ListTile(
                   leading: Icon(Icons.access_time, color: colors.primary),
                   title: const Text('提醒时间'),
-                  subtitle: Text(_formatDateTime(_reminderTime)),
+                  subtitle: Text(formatDateTime(_reminderTime)),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _pickDateTime,
                 ),
@@ -493,12 +494,6 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         ),
       ),
     );
-  }
-
-  static String _formatDateTime(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
   }
 }
 
@@ -673,7 +668,7 @@ class _DraftTile extends StatelessWidget {
                       Icon(Icons.access_time, size: 14, color: colors.primary),
                       const SizedBox(width: 4),
                       Text(
-                        _formatDateTime(draft.suggestedTime),
+                        formatDateTime(draft.suggestedTime),
                         style: textTheme.bodySmall,
                       ),
                       if (draft.reason != null) ...[
@@ -698,12 +693,6 @@ class _DraftTile extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static String _formatDateTime(DateTime dt) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-        '${two(dt.hour)}:${two(dt.minute)}';
   }
 }
 
