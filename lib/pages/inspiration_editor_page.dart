@@ -9,6 +9,7 @@ import 'package:nousmind/models/inspiration.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/widgets/image_preview.dart';
+import 'package:nousmind/widgets/image_preview_screen.dart';
 
 /// Outcome of attempting to pick an image, used internally by the editor.
 enum _PickOutcome { selected, cancelled, failed }
@@ -145,6 +146,30 @@ class _InspirationEditorPageState extends State<InspirationEditorPage> {
     setState(() => _imagePath = null);
   }
 
+  /// Hero tag for the editor's image. Uses the persisted id when
+  /// editing, otherwise fingerprints the current path so the tag
+  /// changes if the user picks a new image.
+  String _imageHeroTag() {
+    final id = widget.initial?.id;
+    return id != null
+        ? 'editor-image:$id'
+        : 'editor-image:new-${_imagePath.hashCode}';
+  }
+
+  void _openImagePreview() {
+    if (_imagePath == null) return;
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, _, _) => ImagePreviewScreen(
+          imagePath: _imagePath!,
+          heroTag: _imageHeroTag(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -167,6 +192,8 @@ class _InspirationEditorPageState extends State<InspirationEditorPage> {
               ImagePreview(
                 imagePath: _imagePath,
                 onRemove: _imagePath == null ? null : _removeImage,
+                onTap: _imagePath == null ? null : _openImagePreview,
+                heroTag: _imagePath == null ? null : _imageHeroTag(),
               ),
               const SizedBox(height: 16),
               Row(

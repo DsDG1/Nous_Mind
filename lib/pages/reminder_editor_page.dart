@@ -17,6 +17,7 @@ import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/image_preview.dart';
+import 'package:nousmind/widgets/image_preview_screen.dart';
 
 /// Page used for both creating a new reminder and editing an existing one.
 ///
@@ -115,6 +116,30 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     setState(() => _imagePath = null);
   }
 
+  /// Hero tag for the editor's image. Uses the persisted id when
+  /// editing, otherwise fingerprints the current path so the tag
+  /// changes if the user picks a new image.
+  String _imageHeroTag() {
+    final id = widget.initial?.id;
+    return id != null
+        ? 'editor-image:$id'
+        : 'editor-image:new-${_imagePath.hashCode}';
+  }
+
+  void _openImagePreview() {
+    if (_imagePath == null) return;
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, _, _) => ImagePreviewScreen(
+          imagePath: _imagePath!,
+          heroTag: _imageHeroTag(),
+        ),
+      ),
+    );
+  }
+
   Future<void> _resolveTimezone() async {
     try {
       final info = await FlutterTimezone.getLocalTimezone();
@@ -173,10 +198,10 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(message)));
       case ApplyDraftEvent(
-          :final title,
-          :final description,
-          :final reminderTime,
-        ):
+        :final title,
+        :final description,
+        :final reminderTime,
+      ):
         setState(() {
           _titleController.text = title;
           if (description != null && description.isNotEmpty) {
@@ -394,6 +419,8 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
               ImagePreview(
                 imagePath: _imagePath,
                 onRemove: _imagePath == null ? null : _removeImage,
+                onTap: _imagePath == null ? null : _openImagePreview,
+                heroTag: _imagePath == null ? null : _imageHeroTag(),
               ),
               const SizedBox(height: 16),
               Row(

@@ -325,6 +325,12 @@ class _ChangelogVersion {
 /// the main page focused on just the latest.
 const List<_ChangelogVersion> _changelog = <_ChangelogVersion>[
   _ChangelogVersion(
+    version: '1.5.3',
+    notes: <String>[
+      '图片支持全屏预览(双指缩放、双击放大、单击关闭、下拉关闭淡出),灵感列表与编辑页共用 Hero 转场;Android release 包同时启用 v1 + v2 签名,兼容老版本 keytool / jarsigner 校验。',
+    ],
+  ),
+  _ChangelogVersion(
     version: '1.5.2',
     notes: <String>[
       '编辑器「AI 自动调整」拆为独立 ReminderAiAdjustController,流程更稳定,修复偶发灰屏',

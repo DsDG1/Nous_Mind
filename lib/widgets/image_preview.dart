@@ -7,11 +7,24 @@ import 'package:flutter/material.dart';
 /// When [imagePath] is null the widget shows a placeholder; otherwise it
 /// displays the image at that path. If [onRemove] is non-null a small
 /// floating close button is rendered over the top-right corner.
+///
+/// Tapping the image invokes [onTap] (if non-null) — typically used to
+/// push a fullscreen preview. [heroTag], when provided alongside [onTap],
+/// enables a [Hero] transition between this thumbnail and the
+/// fullscreen view.
 class ImagePreview extends StatelessWidget {
-  const ImagePreview({super.key, required this.imagePath, this.onRemove});
+  const ImagePreview({
+    super.key,
+    required this.imagePath,
+    this.onRemove,
+    this.onTap,
+    this.heroTag,
+  });
 
   final String? imagePath;
   final VoidCallback? onRemove;
+  final VoidCallback? onTap;
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -41,37 +54,49 @@ class ImagePreview extends StatelessWidget {
                   ],
                 ),
               )
-            : Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  Image.file(
-                    File(imagePath!),
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 48,
-                        color: colors.outline,
-                      ),
-                    ),
-                  ),
-                  if (onRemove != null)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Material(
-                        color: colors.surface.withValues(alpha: 0.8),
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          icon: Icon(Icons.close, color: colors.onSurface),
-                          tooltip: '移除图片',
-                          onPressed: onRemove,
+            : GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    _buildImage(colors),
+                    if (onRemove != null)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Material(
+                          color: colors.surface.withValues(alpha: 0.8),
+                          shape: const CircleBorder(),
+                          child: IconButton(
+                            icon: Icon(Icons.close, color: colors.onSurface),
+                            tooltip: '移除图片',
+                            onPressed: onRemove,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
       ),
     );
+  }
+
+  Widget _buildImage(ColorScheme colors) {
+    final fileImage = Image.file(
+      File(imagePath!),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Center(
+        child: Icon(
+          Icons.broken_image_outlined,
+          size: 48,
+          color: colors.outline,
+        ),
+      ),
+    );
+    if (heroTag == null) {
+      return fileImage;
+    }
+    return Hero(tag: heroTag!, child: fileImage);
   }
 }

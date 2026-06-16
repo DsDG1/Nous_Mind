@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:nousmind/models/inspiration.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/widgets/empty_state.dart';
+import 'package:nousmind/widgets/image_preview_screen.dart';
 import 'package:nousmind/widgets/inspiration_list_item.dart';
 
 /// Home screen for the inspirations tab: shows all inspirations, hosts the
@@ -61,6 +62,7 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
               return InspirationListItem(
                 inspiration: inspiration,
                 onTap: () => _openEditor(context, inspiration),
+                onImageTap: (i) => _openImagePreview(context, i),
                 onDelete: () => _delete(context, viewModel, inspiration.id),
               );
             },
@@ -84,6 +86,7 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
         onTap: (inspiration) {
           context.push('/inspirations/editor', extra: inspiration);
         },
+        onImageTap: (inspiration) => _openImagePreview(context, inspiration),
         onDelete: (id) {
           context.read<InspirationsViewModel>().delete(id);
         },
@@ -93,6 +96,21 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
 
   Future<void> _openEditor(BuildContext context, Inspiration? existing) async {
     await context.push('/inspirations/editor', extra: existing);
+  }
+
+  void _openImagePreview(BuildContext context, Inspiration inspiration) {
+    final path = inspiration.imagePath;
+    if (path == null) return;
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        barrierColor: Colors.black,
+        pageBuilder: (_, _, _) => ImagePreviewScreen(
+          imagePath: path,
+          heroTag: 'inspiration-thumb:${inspiration.id}',
+        ),
+      ),
+    );
   }
 
   Future<void> _delete(
@@ -109,11 +127,13 @@ class _InspirationSearchDelegate extends SearchDelegate<String> {
     required this.viewModel,
     required this.onTap,
     required this.onDelete,
+    this.onImageTap,
   });
 
   final InspirationsViewModel viewModel;
   final void Function(Inspiration) onTap;
   final void Function(String) onDelete;
+  final void Function(Inspiration)? onImageTap;
 
   @override
   String get searchFieldLabel => '搜索灵感...';
@@ -162,6 +182,7 @@ class _InspirationSearchDelegate extends SearchDelegate<String> {
             close(context, inspiration.id);
             onTap(inspiration);
           },
+          onImageTap: onImageTap,
           onDelete: () => onDelete(inspiration.id),
         );
       },

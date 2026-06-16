@@ -53,6 +53,12 @@ android {
                 storeFile = (keystoreProperties["storeFile"] as String?)?.let { file(it) }
                 storePassword = keystoreProperties["storePassword"] as String?
             }
+            // Sign with both v1 (JAR) and v2 (APK Signature Scheme). v1 keeps
+            // legacy tools like `keytool -printcert -jarfile` and
+            // `jarsigner -verify` working; v2 is what the Play Store and modern
+            // installers verify and is required for distribution.
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 

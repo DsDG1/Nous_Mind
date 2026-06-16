@@ -9,19 +9,26 @@ import 'package:nousmind/utils/date_format.dart';
 ///
 /// Renders a 56×56 thumbnail (or a placeholder icon when the file is
 /// missing or the inspiration has no image), the inspiration text, and the
-/// formatted creation timestamp. Tapping the row triggers [onTap]; a left
-/// swipe triggers [onDelete].
+/// formatted creation timestamp. Tapping the row triggers [onTap]; tapping
+/// the thumbnail triggers [onImageTap] (used to open a fullscreen preview);
+/// a left swipe triggers [onDelete].
 class InspirationListItem extends StatelessWidget {
   const InspirationListItem({
     super.key,
     required this.inspiration,
     required this.onTap,
     required this.onDelete,
+    this.onImageTap,
   });
 
   final Inspiration inspiration;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+
+  /// Called when the user taps the thumbnail. Should be null when
+  /// [inspiration] has no image — the thumbnail renders a non-interactive
+  /// placeholder in that case.
+  final void Function(Inspiration)? onImageTap;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +45,13 @@ class InspirationListItem extends StatelessWidget {
       onDismissed: (_) => onDelete(),
       child: ListTile(
         onTap: onTap,
-        leading: _Thumbnail(imagePath: inspiration.imagePath),
+        leading: _Thumbnail(
+          imagePath: inspiration.imagePath,
+          heroTag: 'inspiration-thumb:${inspiration.id}',
+          onTap: onImageTap == null || inspiration.imagePath == null
+              ? null
+              : () => onImageTap!(inspiration),
+        ),
         title: Text(
           inspiration.text,
           style: Theme.of(context).textTheme.titleMedium,
@@ -52,9 +65,11 @@ class InspirationListItem extends StatelessWidget {
 }
 
 class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.imagePath});
+  const _Thumbnail({required this.imagePath, this.onTap, this.heroTag});
 
   final String? imagePath;
+  final VoidCallback? onTap;
+  final Object? heroTag;
 
   @override
   Widget build(BuildContext context) {
@@ -66,14 +81,26 @@ class _Thumbnail extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: imagePath == null
             ? _Placeholder(colors: colors)
-            : Image.file(
-                File(imagePath!),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    _Placeholder(colors: colors),
+            : GestureDetector(
+                onTap: onTap,
+                behavior: HitTestBehavior.opaque,
+                child: _buildImage(colors),
               ),
       ),
     );
+  }
+
+  Widget _buildImage(ColorScheme colors) {
+    final fileImage = Image.file(
+      File(imagePath!),
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) =>
+          _Placeholder(colors: colors),
+    );
+    if (heroTag == null) {
+      return fileImage;
+    }
+    return Hero(tag: heroTag!, child: fileImage);
   }
 }
 
