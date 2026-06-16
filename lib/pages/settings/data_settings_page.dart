@@ -12,6 +12,7 @@ import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
+import 'package:nousmind/widgets/settings_stats_row.dart';
 
 /// Settings subpage for data management: stats, backup / restore, and
 /// bulk-clear actions. Every mutation goes through the relevant view
@@ -257,7 +258,18 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                   ValueListenableBuilder<StorageStats?>(
                     valueListenable:
                         context.read<BackupService>().statsNotifier,
-                    builder: (context, stats, _) => _StatsRow(stats: stats),
+                    builder: (context, stats, _) {
+                      if (stats == null) {
+                        return const ListTile(
+                          leading: Icon(Icons.hourglass_empty),
+                          title: Text('正在加载……'),
+                        );
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        child: SettingsStatsRow(stats: stats),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -332,86 +344,6 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Single read-only row showing the live storage stats.
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats});
-
-  final StorageStats? stats;
-
-  @override
-  Widget build(BuildContext context) {
-    if (stats == null) {
-      return const ListTile(
-        leading: Icon(Icons.hourglass_empty),
-        title: Text('正在加载……'),
-      );
-    }
-    final s = stats;
-    final reminderText = s == null ? '—' : '${s.reminderCount}';
-    final inspirationText = s == null ? '—' : '${s.inspirationCount}';
-    final imageText = s == null ? '—' : BackupService.formatBytes(s.imageBytes);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: _StatCell(label: '提醒', value: reminderText),
-          ),
-          const _StatDivider(),
-          Expanded(
-            child: _StatCell(label: '灵感', value: inspirationText),
-          ),
-          const _StatDivider(),
-          Expanded(
-            child: _StatCell(label: '图片', value: imageText),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatCell extends StatelessWidget {
-  const _StatCell({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          value,
-          style: textTheme.titleLarge?.copyWith(
-            color: colors.primary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: textTheme.bodySmall),
-      ],
-    );
-  }
-}
-
-class _StatDivider extends StatelessWidget {
-  const _StatDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 32,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: Theme.of(context).dividerColor,
     );
   }
 }

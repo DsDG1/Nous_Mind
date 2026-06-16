@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/services/backup_service.dart';
+import 'package:nousmind/widgets/settings_stats_row.dart';
 
 /// Compact card displayed at the top of the settings home page. Shows
 /// the current record counts and the on-disk size of the user's images.
@@ -25,35 +26,7 @@ class SettingsStatsCard extends StatelessWidget {
           final colors = Theme.of(context).colorScheme;
           return _shell(
             colors,
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: _StatCell(
-                    icon: Icons.notifications_active_outlined,
-                    value: stats == null ? '—' : '${stats.reminderCount}',
-                    label: '提醒',
-                  ),
-                ),
-                _Divider(color: colors.outlineVariant),
-                Expanded(
-                  child: _StatCell(
-                    icon: Icons.lightbulb_outline,
-                    value: stats == null ? '—' : '${stats.inspirationCount}',
-                    label: '灵感',
-                  ),
-                ),
-                _Divider(color: colors.outlineVariant),
-                Expanded(
-                  child: _StatCell(
-                    icon: Icons.image_outlined,
-                    value: stats == null
-                        ? '—'
-                        : BackupService.formatBytes(stats.imageBytes),
-                    label: '图片',
-                  ),
-                ),
-              ],
-            ),
+            child: SettingsStatsRow(stats: stats),
           );
         },
       ),
@@ -69,59 +42,6 @@ class SettingsStatsCard extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       child: child,
-    );
-  }
-}
-
-class _StatCell extends StatelessWidget {
-  const _StatCell({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Icon(icon, size: 18, color: colors.primary),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colors.onSurface,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 1,
-      height: 40,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: color,
     );
   }
 }
