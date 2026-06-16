@@ -19,8 +19,6 @@ class InspirationsHomePage extends StatefulWidget {
 }
 
 class _InspirationsHomePageState extends State<InspirationsHomePage> {
-  final String _query = '';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -39,19 +37,12 @@ class _InspirationsHomePageState extends State<InspirationsHomePage> {
           if (!viewModel.isLoaded) {
             return const Center(child: CircularProgressIndicator());
           }
-          final items = _query.isEmpty
-              ? viewModel.inspirations
-              : viewModel.inspirations
-                    .where(
-                      (i) =>
-                          i.text.toLowerCase().contains(_query.toLowerCase()),
-                    )
-                    .toList();
+          final items = viewModel.inspirations;
           if (items.isEmpty) {
-            return EmptyState(
-              icon: _query.isEmpty ? Icons.lightbulb_outline : Icons.search_off,
-              title: _query.isEmpty ? '还没有灵感' : '没有匹配结果',
-              subtitle: _query.isEmpty ? '点击右下角 + 记录一条' : '换个关键词试试',
+            return const EmptyState(
+              icon: Icons.lightbulb_outline,
+              title: '还没有灵感',
+              subtitle: '点击右下角 + 记录一条',
             );
           }
           return ListView.separated(
