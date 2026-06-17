@@ -27,12 +27,36 @@ import 'package:nousmind/viewmodels/settings_view_model.dart';
 class NotificationActionRouter {
   const NotificationActionRouter();
 
+  static final List<NotificationResponse> _pendingResponses = <NotificationResponse>[];
+
   void route(NotificationResponse response) {
     final action = response.actionId;
     final reminderId = response.payload;
     if (action == null || reminderId == null || reminderId.isEmpty) return;
     final navigatorContext = rootNavigatorKey.currentContext;
-    if (navigatorContext == null) return;
+    if (navigatorContext == null) {
+      developer.log('Navigator context is null, queueing notification action response: actionId=$action, payload=$reminderId');
+      _pendingResponses.add(response);
+      return;
+    }
+    _handleResponse(navigatorContext, response);
+  }
+
+  /// Processes any queued notification responses using the provided [context].
+  static void processPending(BuildContext context) {
+    if (_pendingResponses.isEmpty) return;
+    developer.log('Processing ${_pendingResponses.length} pending notification action responses');
+    final copy = List<NotificationResponse>.from(_pendingResponses);
+    _pendingResponses.clear();
+    for (final response in copy) {
+      _handleResponse(context, response);
+    }
+  }
+
+  static void _handleResponse(BuildContext navigatorContext, NotificationResponse response) {
+    final action = response.actionId;
+    final reminderId = response.payload;
+    if (action == null || reminderId == null || reminderId.isEmpty) return;
     try {
       final reminders = Provider.of<RemindersViewModel>(
         navigatorContext,

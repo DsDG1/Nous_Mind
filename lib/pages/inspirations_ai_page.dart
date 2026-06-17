@@ -1,13 +1,13 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'package:flutter/material.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/inspiration.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
+import 'package:nousmind/utils/timezone_fallback.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
@@ -78,12 +78,7 @@ class _InspirationsAiPageState extends State<InspirationsAiPage> {
   }
 
   Future<String> _resolveTimezone() async {
-    try {
-      final info = await FlutterTimezone.getLocalTimezone();
-      return info.identifier;
-    } on Exception {
-      return 'UTC';
-    }
+    return getSafeLocalTimezone();
   }
 
   Future<void> _runAnalysis(List<Inspiration> allInspirations) async {

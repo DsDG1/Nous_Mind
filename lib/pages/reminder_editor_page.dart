@@ -3,7 +3,6 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +15,7 @@ import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
 import 'package:nousmind/utils/date_format.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
+import 'package:nousmind/utils/timezone_fallback.dart';
 import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
@@ -176,10 +176,10 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
 
   Future<void> _resolveTimezone() async {
     try {
-      final info = await FlutterTimezone.getLocalTimezone();
+      final timezoneId = await getSafeLocalTimezone();
       if (!mounted) return;
       setState(() {
-        _timezone = info.identifier;
+        _timezone = timezoneId;
       });
     } on Exception catch (error, stackTrace) {
       developer.log(

@@ -282,8 +282,8 @@ class _AnimatedRemindersListState extends State<_AnimatedRemindersList> {
           // item — even when the item changes index in the list.
           key: ValueKey<String>(reminder.id),
           offset: offset,
+          measurementKey: key,
           child: ReminderListItem(
-            key: key,
             reminder: reminder,
             onTap: () => widget.onTap(reminder),
             onDelete: () => widget.onDelete(reminder),
@@ -345,10 +345,12 @@ class _AnimatedReminderRow extends StatefulWidget {
     super.key,
     required this.offset,
     required this.child,
+    required this.measurementKey,
   });
 
   final double offset;
   final Widget child;
+  final Key measurementKey;
 
   @override
   State<_AnimatedReminderRow> createState() => _AnimatedReminderRowState();
@@ -360,7 +362,6 @@ class _AnimatedReminderRowState extends State<_AnimatedReminderRow>
 
   late final AnimationController _controller;
   late Animation<double> _animation;
-  double _lastOffset = 0;
 
   @override
   void initState() {
@@ -373,12 +374,14 @@ class _AnimatedReminderRowState extends State<_AnimatedReminderRow>
   @override
   void didUpdateWidget(covariant _AnimatedReminderRow oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.offset != _lastOffset) {
-      _animation = _buildAnimation(widget.offset);
+    if (widget.offset != 0) {
+      // Calculate current translation value to ensure continuity
+      final currentTranslation = _animation.value;
+      final startOffset = widget.offset + currentTranslation;
+      _animation = _buildAnimation(startOffset);
       _controller
         ..reset()
         ..forward();
-      _lastOffset = widget.offset;
     }
   }
 
@@ -395,13 +398,16 @@ class _AnimatedReminderRowState extends State<_AnimatedReminderRow>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) => Transform.translate(
-        offset: Offset(0, _animation.value),
-        child: child,
+    return SizedBox(
+      key: widget.measurementKey,
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, _animation.value),
+          child: child,
+        ),
+        child: widget.child,
       ),
-      child: widget.child,
     );
   }
 }

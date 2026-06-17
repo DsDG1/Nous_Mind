@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
+import 'package:nousmind/utils/timezone_fallback.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 
 /// Settings subpage for editing the system prompts used by the AI
@@ -118,12 +118,7 @@ class _AiPromptsSettingsPageState extends State<AiPromptsSettingsPage> {
   }
 
   Future<String> _resolveTimezone() async {
-    try {
-      final info = await FlutterTimezone.getLocalTimezone();
-      return info.identifier;
-    } on Exception {
-      return 'UTC';
-    }
+    return getSafeLocalTimezone();
   }
 
   Future<void> _resetErrorAnalysis(SettingsViewModel vm) async {

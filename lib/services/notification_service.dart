@@ -2,12 +2,12 @@ import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/utils/timezone_fallback.dart';
 
 /// Wraps [FlutterLocalNotificationsPlugin] with reminder-specific helpers.
 ///
@@ -77,16 +77,28 @@ class NotificationService {
     _onAction = onAction;
 
     tz_data.initializeTimeZones();
+    String? resolvedIdentifier;
     try {
-      final timezoneInfo = await FlutterTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(timezoneInfo.identifier));
+      resolvedIdentifier = await getSafeLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(resolvedIdentifier));
     } on Exception catch (error, stackTrace) {
       developer.log(
-        'Failed to resolve local timezone; falling back to UTC',
+        'Failed to set timezone location for identifier "$resolvedIdentifier". Attempting offset fallback...',
         error: error,
         stackTrace: stackTrace,
       );
-      tz.setLocalLocation(tz.UTC);
+      try {
+        final fallbackId = getFallbackTimezoneIdentifier();
+        tz.setLocalLocation(tz.getLocation(fallbackId));
+        developer.log('Successfully set local location to fallback offset timezone "$fallbackId"');
+      } on Exception catch (fallbackError, fallbackStackTrace) {
+        developer.log(
+          'Failed to set fallback offset timezone. Falling back to UTC',
+          error: fallbackError,
+          stackTrace: fallbackStackTrace,
+        );
+        tz.setLocalLocation(tz.UTC);
+      }
     }
 
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -217,19 +229,49 @@ class NotificationService {
       return;
     }
     final body = _composeBody(reminder);
-    await _plugin.zonedSchedule(
-      id: _idFromReminderId(reminder.id),
-      title: reminder.title,
-      body: body,
-      scheduledDate: tzTarget,
-      payload: reminder.id,
-      notificationDetails: _details(
-        vibrationEnabled: vibrationEnabled,
+    try {
+      await _plugin.zonedSchedule(
+        id: _idFromReminderId(reminder.id),
+        title: reminder.title,
         body: body,
-        snoozeActionLabel: snoozeActionLabel,
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-    );
+        scheduledDate: tzTarget,
+        payload: reminder.id,
+        notificationDetails: _details(
+          vibrationEnabled: vibrationEnabled,
+          body: body,
+          snoozeActionLabel: snoozeActionLabel,
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      );
+    } catch (e, stackTrace) {
+      developer.log(
+        'Failed to schedule exact alarm for reminder ${reminder.id}; falling back to non-exact allowWhileIdle',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      try {
+        await _plugin.zonedSchedule(
+          id: _idFromReminderId(reminder.id),
+          title: reminder.title,
+          body: body,
+          scheduledDate: tzTarget,
+          payload: reminder.id,
+          notificationDetails: _details(
+            vibrationEnabled: vibrationEnabled,
+            body: body,
+            snoozeActionLabel: snoozeActionLabel,
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      } catch (fallbackError, fallbackStackTrace) {
+        developer.log(
+          'Failed to schedule non-exact fallback alarm for reminder ${reminder.id}',
+          error: fallbackError,
+          stackTrace: fallbackStackTrace,
+        );
+        rethrow;
+      }
+    }
   }
 
   /// Body text for a scheduled reminder. Prefers the user-supplied

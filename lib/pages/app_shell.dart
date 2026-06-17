@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nousmind/app/notification_action_router.dart';
 
 /// The bottom-navigation shell that hosts both the reminders and
 /// inspirations tabs. Wraps the [StatefulNavigationShell] provided by
@@ -11,6 +12,9 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationActionRouter.processPending(context);
+    });
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(

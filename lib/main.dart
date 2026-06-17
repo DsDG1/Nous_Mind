@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:nousmind/utils/timezone_fallback.dart';
 import 'package:nested/nested.dart';
 import 'package:provider/provider.dart';
 
@@ -94,12 +94,7 @@ Future<void> main() async {
 }
 
 Future<String> _readTimezone() async {
-  try {
-    final info = await FlutterTimezone.getLocalTimezone();
-    return info.identifier;
-  } on Exception {
-    return 'UTC';
-  }
+  return getSafeLocalTimezone();
 }
 
 class RemindersApp extends StatefulWidget {
