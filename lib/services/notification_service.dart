@@ -8,6 +8,9 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/models/reminder.dart';
 import 'package:nousmind/utils/timezone_fallback.dart';
+import 'package:nousmind/services/database.dart';
+import 'package:nousmind/services/reminder_repository.dart';
+import 'package:nousmind/services/settings_repository.dart';
 
 /// Wraps [FlutterLocalNotificationsPlugin] with reminder-specific helpers.
 ///
@@ -164,11 +167,59 @@ class NotificationService {
   /// launch; for now we just log so the user can see the action was
   /// received if they inspect the OS notification log.
   @pragma('vm:entry-point')
-  static void _handleBackgroundResponse(NotificationResponse response) {
+  static void _handleBackgroundResponse(NotificationResponse response) async {
     developer.log(
       'Background notification action: '
       'actionId=${response.actionId}, payload=${response.payload}',
     );
+    final action = response.actionId;
+    final reminderId = response.payload;
+    if (action == null || reminderId == null || reminderId.isEmpty) return;
+
+    try {
+      WidgetsFlutterBinding.ensureInitialized();
+      final database = await AppDatabase.open();
+      final settingsRepo = SettingsRepository(database);
+      final reminderRepo = ReminderRepository(database);
+
+      final settings = await settingsRepo.load();
+      final reminder = await reminderRepo.findById(reminderId);
+
+      if (reminder != null) {
+        final notifications = NotificationService();
+        await notifications.init(
+          onTapBody: () {},
+          onAction: (_) {},
+        );
+
+        if (action == kSnoozeActionId) {
+          final duration = settings.snoozeDuration.duration;
+          final snoozed = reminder.copyWith(
+            reminderTime: DateTime.now().add(duration),
+          );
+          await reminderRepo.update(snoozed);
+          await notifications.cancelReminder(reminderId);
+          await notifications.scheduleReminder(
+            snoozed,
+            vibrationEnabled: settings.vibrationEnabled,
+            quietHours: settings.quietHoursEnabled ? settings.quietHours : null,
+            snoozeActionLabel: '稍后提醒（${settings.snoozeDuration.label}）',
+          );
+          developer.log('Background snooze completed for reminder: $reminderId');
+        } else if (action == kCompleteActionId) {
+          await reminderRepo.softDelete(reminderId, DateTime.now());
+          await notifications.cancelReminder(reminderId);
+          developer.log('Background complete completed for reminder: $reminderId');
+        }
+      }
+      await database.close();
+    } catch (e, stackTrace) {
+      developer.log(
+        'Failed to process background notification action',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// Asks the OS for the runtime permissions needed to post local

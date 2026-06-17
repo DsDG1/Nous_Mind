@@ -439,7 +439,16 @@ class RemindersViewModel extends ChangeNotifier {
 
   /// Public hook so the app's lifecycle observer can trigger a purge on
   /// every foreground resume without exposing the private method.
-  Future<void> onAppResumed() => _purgeTrashAndExpired();
+  Future<void> onAppResumed() async {
+    final loaded = await _repository.getAllActive();
+    _trashCount = await _repository.countTrash();
+    _reminders
+      ..clear()
+      ..addAll(loaded);
+    notifyListeners();
+    _timer.schedule(_reminders);
+    await _purgeTrashAndExpired();
+  }
 
   /// Removes every active reminder, cancels its scheduled notification,
   /// and deletes the associated image file (if any). Used by the data
