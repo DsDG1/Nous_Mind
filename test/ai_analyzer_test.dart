@@ -413,10 +413,7 @@ void main() {
       });
       final analyzer = DeepSeekAnalyzer(client: client);
       addTearDown(analyzer.dispose);
-      await analyzer.analyzeError(
-        text: 'a\n\n\n\n\nb',
-        apiKey: 'k',
-      );
+      await analyzer.analyzeError(text: 'a\n\n\n\n\nb', apiKey: 'k');
       // Five newlines collapse to two (one blank line).
       expect(captured, isNot(contains('\n\n\n')));
     });
@@ -427,8 +424,8 @@ void main() {
       final client = MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final messages = body['messages'] as List<dynamic>;
-        final content = (messages.first as Map<String, dynamic>)['content']
-            as String;
+        final content =
+            (messages.first as Map<String, dynamic>)['content'] as String;
         if (content.contains('资深工程师')) {
           defaultPrompt = content;
         } else {
@@ -466,8 +463,8 @@ void main() {
       final client = MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final messages = body['messages'] as List<dynamic>;
-        captured = (messages.first as Map<String, dynamic>)['content']
-            as String;
+        captured =
+            (messages.first as Map<String, dynamic>)['content'] as String;
         return http.Response(
           jsonEncode(<String, dynamic>{
             'choices': <Map<String, dynamic>>[
@@ -501,8 +498,7 @@ void main() {
       final client = MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final messages = body['messages'] as List<dynamic>;
-        captured = (messages.last as Map<String, dynamic>)['content']
-            as String;
+        captured = (messages.last as Map<String, dynamic>)['content'] as String;
         return http.Response(
           jsonEncode(<String, dynamic>{
             'choices': <Map<String, dynamic>>[

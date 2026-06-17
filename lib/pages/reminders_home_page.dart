@@ -3,12 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/models/tag.dart';
 import 'package:nousmind/services/app_settings_bridge.dart';
 import 'package:nousmind/services/calendar_service.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/empty_state.dart';
 import 'package:nousmind/widgets/reminder_list_item.dart';
+import 'package:nousmind/widgets/tag_filter_sheet.dart';
 
 /// Home screen: shows all reminders, hosts the FAB to add a new one, and
 /// routes taps to the editor and left-swipes to delete.
@@ -84,21 +87,76 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
     messenger.showAppSnackBar(message);
   }
 
+  Future<void> _openFilterSheet(
+    BuildContext context,
+    RemindersViewModel remindersVm,
+    TagsViewModel tagsVm,
+  ) async {
+    final selected = await TagFilterSheet.show(
+      context,
+      selectedTagId: remindersVm.selectedTagId,
+      tags: tagsVm.tags,
+      title: '筛选标签',
+    );
+    if (!context.mounted) return;
+    if (selected == null) {
+      // Dismissed (drag / close / outside tap) — do nothing, keep current filter
+      return;
+    }
+    if (selected == TagFilterSheet.allTagsSentinel) {
+      remindersVm.setSelectedTagId(null);
+    } else if (selected == TagFilterSheet.createNewSentinel) {
+      // The home page's sheet is read-only; nudge the user to the
+      // settings subpage instead of inlining a creation flow.
+      ScaffoldMessenger.of(context).showAppSnackBar('请到「设置 → 标签」中管理自定义标签');
+    } else {
+      remindersVm.setSelectedTagId(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('提醒事项')),
+      appBar: AppBar(
+        title: const Text('提醒事项'),
+        leading: Selector<RemindersViewModel, String?>(
+          selector: (_, vm) => vm.selectedTagId,
+          builder: (context, selectedTagId, _) {
+            return Consumer<TagsViewModel>(
+              builder: (context, tagsVm, _) {
+                final isFiltering = selectedTagId != null;
+                return IconButton(
+                  icon: Icon(
+                    isFiltering ? Icons.filter_alt : Icons.filter_alt_outlined,
+                  ),
+                  tooltip: isFiltering
+                      ? '筛选中：${_filterLabel(tagsVm, selectedTagId)}'
+                      : '筛选标签',
+                  onPressed: () => _openFilterSheet(
+                    context,
+                    context.read<RemindersViewModel>(),
+                    tagsVm,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
       body: Consumer<RemindersViewModel>(
         builder: (context, viewModel, _) {
           if (!viewModel.isLoaded) {
             return const Center(child: CircularProgressIndicator());
           }
-          final items = viewModel.reminders;
+          final items = viewModel.visibleReminders;
           if (items.isEmpty) {
-            return const EmptyState(
-              icon: Icons.notifications_none,
-              title: '还没有提醒',
-              subtitle: '点击右下角 + 添加',
+            final hasFilter = viewModel.selectedTagId != null;
+            return EmptyState(
+              icon: hasFilter
+                  ? Icons.filter_alt_off_outlined
+                  : Icons.notifications_none,
+              title: hasFilter ? '该标签下暂无提醒' : '还没有提醒',
+              subtitle: hasFilter ? '切换筛选条件以查看其他提醒' : '点击右下角 + 添加',
             );
           }
           return ListView.separated(
@@ -112,6 +170,8 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
                 onDelete: () =>
                     _deleteWithFeedback(context, viewModel, reminder),
                 onAddToCalendar: () => _addToCalendarWithFeedback(reminder),
+                onToggleComplete: () =>
+                    viewModel.setCompleted(reminder.id, !reminder.isCompleted),
               );
             },
           );
@@ -125,5 +185,15 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
         child: const Icon(Icons.add),
       ),
     );
+  }
+
+  /// Resolves a tag id to a human label for the AppBar tooltip.
+  /// Falls back to the id itself if the tag was just deleted.
+  String _filterLabel(TagsViewModel tagsVm, String tagId) {
+    if (tagId == kCompletedTagId) return '已完成';
+    for (final t in tagsVm.tags) {
+      if (t.id == tagId) return t.name;
+    }
+    return tagId;
   }
 }

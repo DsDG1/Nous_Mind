@@ -12,6 +12,7 @@ class ReminderDraft {
     required this.suggestedTime,
     this.reason,
     this.description,
+    this.tagId,
     this.selected = true,
   });
 
@@ -35,6 +36,11 @@ class ReminderDraft {
   /// `description` field for the reminder; otherwise `null`.
   String? description;
 
+  /// Optional id of the [Tag] the AI chose for this draft. `null`
+  /// when the model didn't pick one or its id was rejected by the
+  /// parser's allow-list. Mirrors [Reminder.tagId].
+  String? tagId;
+
   /// Whether this draft should be saved when the user taps the bulk
   /// "添加" button. Defaults to `true`.
   bool selected;
@@ -44,6 +50,7 @@ class ReminderDraft {
     DateTime? suggestedTime,
     String? reason,
     String? description,
+    String? tagId,
     bool? selected,
   }) {
     return ReminderDraft(
@@ -52,6 +59,7 @@ class ReminderDraft {
       suggestedTime: suggestedTime ?? this.suggestedTime,
       reason: reason ?? this.reason,
       description: description ?? this.description,
+      tagId: tagId ?? this.tagId,
       selected: selected ?? this.selected,
     );
   }

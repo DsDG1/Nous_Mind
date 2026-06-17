@@ -158,10 +158,7 @@ class _InspirationEditorPageState extends State<InspirationEditorPage> {
   void _openImagePreview() {
     if (_imagePath == null) return;
     Navigator.of(context, rootNavigator: true).push(
-      openImagePreviewRoute(
-        imagePath: _imagePath!,
-        heroTag: _imageHeroTag(),
-      ),
+      openImagePreviewRoute(imagePath: _imagePath!, heroTag: _imageHeroTag()),
     );
   }
 

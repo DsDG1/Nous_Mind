@@ -394,11 +394,17 @@ class _AboutSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SettingsSection(
-      title: '关于',
+      title: '关于与帮助',
       icon: Icons.info_outline,
-      children: const <Widget>[
-        SettingsTile(leading: Icon(Icons.code), title: '由 DsDogs 制作'),
+      children: <Widget>[
         SettingsTile(
+          leading: const Icon(Icons.help_outline),
+          title: '新手教程',
+          subtitle: '查看功能介绍与指引',
+          onTap: () => context.push('/settings/about/tutorial'),
+        ),
+        const SettingsTile(leading: Icon(Icons.code), title: '由 DsDogs 制作'),
+        const SettingsTile(
           leading: Icon(Icons.bolt_outlined),
           title: '主要使用 Vibe Coding 开发',
         ),

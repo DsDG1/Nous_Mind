@@ -144,9 +144,7 @@ Route<void> openImagePreviewRoute({
   return PageRouteBuilder<void>(
     opaque: false,
     barrierColor: Colors.black,
-    pageBuilder: (_, _, _) => ImagePreviewScreen(
-      imagePath: imagePath,
-      heroTag: heroTag,
-    ),
+    pageBuilder: (_, _, _) =>
+        ImagePreviewScreen(imagePath: imagePath, heroTag: heroTag),
   );
 }

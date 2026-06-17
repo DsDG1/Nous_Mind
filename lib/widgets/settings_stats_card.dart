@@ -24,10 +24,7 @@ class SettingsStatsCard extends StatelessWidget {
         valueListenable: backup.statsNotifier,
         builder: (context, stats, _) {
           final colors = Theme.of(context).colorScheme;
-          return _shell(
-            colors,
-            child: SettingsStatsRow(stats: stats),
-          );
+          return _shell(colors, child: SettingsStatsRow(stats: stats));
         },
       ),
     );

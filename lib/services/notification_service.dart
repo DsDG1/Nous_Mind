@@ -124,13 +124,14 @@ class NotificationService {
     );
 
     final launchDetails = await _plugin.getNotificationAppLaunchDetails();
-    if (launchDetails?.didNotificationLaunchApp ?? false) {
-      final response = launchDetails!.notificationResponse;
-      if (response?.actionId == null) {
-        _onTapBody?.call();
-      } else {
-        _onAction?.call(response!);
-      }
+    if (launchDetails == null || !launchDetails.didNotificationLaunchApp) {
+      return;
+    }
+    final response = launchDetails.notificationResponse;
+    if (response?.actionId == null) {
+      _onTapBody?.call();
+    } else {
+      _onAction?.call(response!);
     }
   }
 

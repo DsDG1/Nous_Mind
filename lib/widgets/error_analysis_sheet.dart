@@ -239,10 +239,11 @@ class _ErrorAnalysisSheetState extends State<ErrorAnalysisSheet> {
         ),
       );
     }
-    if (_error != null) {
+    final error = _error;
+    if (error != null) {
       return _Card(
         label: '分析失败',
-        body: _error!.message,
+        body: error.message,
         bg: colors.errorContainer,
         fg: colors.onErrorContainer,
       );

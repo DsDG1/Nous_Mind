@@ -6,6 +6,12 @@ import 'package:nousmind/services/database.dart';
 class ReminderRepository {
   ReminderRepository(this._database);
 
+  /// How long a soft-deleted reminder stays in the trash before the
+  /// next purge sweep removes it permanently. Hard-coded for now;
+  /// promoting it to a user-facing setting is on the roadmap but
+  /// intentionally out of scope for v1.3.0.
+  static const Duration trashRetention = Duration(days: 30);
+
   final AppDatabase _database;
 
   /// Returns every non-trashed reminder, newest first. Backed by the
@@ -187,6 +193,8 @@ class ReminderRepository {
     'is_deleted': r.isDeleted ? 1 : 0,
     'deleted_at': r.deletedAt?.toIso8601String(),
     'created_at': r.createdAt.toIso8601String(),
+    'tag_id': r.tagId,
+    'previous_tag_id': r.previousTagId,
   };
 
   static Reminder _fromRow(Map<String, dynamic> row) => Reminder.fromMap(row);

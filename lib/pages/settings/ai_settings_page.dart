@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:nousmind/pages/settings/privacy_policy_page.dart';
+import 'package:nousmind/pages/settings/user_agreement_page.dart';
 import 'package:nousmind/services/chinese_ocr_installer.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
@@ -65,6 +67,7 @@ class _PromptsSection extends StatelessWidget {
     final customCount = <bool>[
       settings.aiErrorAnalysisPrompt != null,
       settings.aiAdjustPrompt != null,
+      settings.aiInspirationPrompt != null,
     ].where((c) => c).length;
     return SettingsSection(
       title: '提示词',
@@ -73,7 +76,7 @@ class _PromptsSection extends StatelessWidget {
         SettingsTile(
           leading: const Icon(Icons.tune_outlined),
           title: '自定义 prompt',
-          subtitle: customCount == 0 ? '全部使用默认' : '已自定义 $customCount / 2',
+          subtitle: customCount == 0 ? '全部使用默认' : '已自定义 $customCount / 3',
           onTap: () => context.push('/settings/ai/prompts'),
         ),
       ],
@@ -150,7 +153,7 @@ class _DeepSeekProviderCard extends StatelessWidget {
               ),
               _SwitchInterceptor(
                 value: enabled,
-                onChanged: (v) => vm.setAiAssistantEnabled(v),
+                onChanged: (v) => handleAiToggle(context, vm, v),
               ),
             ],
           ),
@@ -444,5 +447,129 @@ class _AiUsageCard extends StatelessWidget {
     );
     if (result == null) return;
     await vm.setAiDailyLimit(result);
+  }
+}
+
+/// Routes the AI assistant master switch through the consent gate.
+///
+/// Disabling the switch never asks for consent. Enabling it skips the
+/// dialog when the user has accepted before, and otherwise pops a
+/// dialog that links to the User Agreement and Privacy Policy pages.
+/// The dialog is `barrierDismissible: false` so the user has to make
+/// an explicit choice; on cancel we simply do nothing and the switch
+/// stays off (it is a controlled widget bound to the persisted
+/// setting).
+Future<void> handleAiToggle(
+  BuildContext context,
+  SettingsViewModel vm,
+  bool desired,
+) async {
+  if (!desired) {
+    await vm.setAiAssistantEnabled(false);
+    return;
+  }
+  if (vm.settings.aiConsentAcceptedAt != null) {
+    await vm.setAiAssistantEnabled(true);
+    return;
+  }
+  final accepted = await showAiConsentDialog(context);
+  if (accepted == true) {
+    await vm.acceptAiConsent();
+  }
+}
+
+/// Shows the "启用 AI 助手" dialog that gates the first time the user
+/// enables the AI assistant. Returns `true` when the user accepts,
+/// `false` when they cancel, and `null` if the dialog is dismissed by
+/// other means (defensive — `barrierDismissible: false` makes this
+/// effectively impossible).
+Future<bool?> showAiConsentDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (dialogContext) {
+      return AlertDialog(
+        title: const Text('启用 AI 助手'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              const Text(
+                'AI 助手将由您填入的 DeepSeek API Key 调用第三方服务,'
+                '在您主动点击 AI 按钮时,'
+                '把您填写的提醒文本、描述、OCR 文本与自定义提示词'
+                '通过 HTTPS 发送给 DeepSeek。',
+                style: TextStyle(height: 1.5),
+              ),
+              const SizedBox(height: 12),
+              const Text('继续即表示您已阅读并同意:'),
+              const SizedBox(height: 4),
+              _AgreeLink(
+                label: '《用户协议》',
+                onTap: () => Navigator.of(dialogContext).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const UserAgreementPage(),
+                  ),
+                ),
+              ),
+              _AgreeLink(
+                label: '《隐私政策》',
+                onTap: () => Navigator.of(dialogContext).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const PrivacyPolicyPage(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('同意并启用'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+/// Inline link-style button used inside the consent dialog. Renders as
+/// a primary-coloured underlined label so the user reads it as a tap
+/// target rather than body text.
+class _AgreeLink extends StatelessWidget {
+  const _AgreeLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          minimumSize: const Size(0, 32),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          alignment: AlignmentDirectional.centerStart,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: colors.primary,
+            decoration: TextDecoration.underline,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
   }
 }

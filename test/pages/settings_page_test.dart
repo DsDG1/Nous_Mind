@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import 'package:nousmind/pages/settings_page.dart';
 import 'package:nousmind/services/backup_service.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 import 'package:nousmind/widgets/settings_stats_card.dart';
 
@@ -34,16 +35,20 @@ class _RecordingNavigatorObserver extends NavigatorObserver {
 void main() {
   late TestDatabase testDb;
   late SettingsViewModel settingsVm;
+  late TagsViewModel tagsVm;
   late BackupService backupService;
 
   setUp(() async {
     testDb = await TestDatabase.create();
     settingsVm = makeSettingsVm();
+    tagsVm = TagsViewModel(testDb.tagRepository);
+    await tagsVm.refresh();
     backupService = testDb.backupService;
   });
 
   tearDown(() async {
     settingsVm.dispose();
+    tagsVm.dispose();
     await testDb.dispose();
   });
 
@@ -52,13 +57,14 @@ void main() {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<SettingsViewModel>.value(value: settingsVm),
+        ChangeNotifierProvider<TagsViewModel>.value(value: tagsVm),
         Provider<BackupService>.value(value: backupService),
       ],
       child: child,
     );
   }
 
-  testWidgets('renders the five settings tiles and the stats card', (
+  testWidgets('renders the six settings tiles and the stats card', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -70,6 +76,7 @@ void main() {
     expect(find.text('外观'), findsOneWidget);
     expect(find.text('通知'), findsOneWidget);
     expect(find.text('数据'), findsOneWidget);
+    expect(find.text('标签'), findsOneWidget);
     expect(find.text('AI 助手'), findsOneWidget);
     expect(find.text('关于'), findsOneWidget);
   });
@@ -91,32 +98,29 @@ void main() {
         ),
         GoRoute(
           path: '/settings/appearance',
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('appearance')),
-          ),
+          builder: (_, _) =>
+              const Scaffold(body: Center(child: Text('appearance'))),
         ),
         GoRoute(
           path: '/settings/notification',
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('notification')),
-          ),
+          builder: (_, _) =>
+              const Scaffold(body: Center(child: Text('notification'))),
         ),
         GoRoute(
           path: '/settings/data',
-          builder: (_, _) =>
-              const Scaffold(body: Center(child: Text('data'))),
+          builder: (_, _) => const Scaffold(body: Center(child: Text('data'))),
+        ),
+        GoRoute(
+          path: '/settings/tags',
+          builder: (_, _) => const Scaffold(body: Center(child: Text('tags'))),
         ),
         GoRoute(
           path: '/settings/ai',
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('ai')),
-          ),
+          builder: (_, _) => const Scaffold(body: Center(child: Text('ai'))),
         ),
         GoRoute(
           path: '/settings/about',
-          builder: (_, _) => const Scaffold(
-            body: Center(child: Text('about')),
-          ),
+          builder: (_, _) => const Scaffold(body: Center(child: Text('about'))),
         ),
       ],
     );
@@ -127,13 +131,20 @@ void main() {
     // appear in the observer's record.
     Future<void> tapAndExpect(String label, String subrouteText) async {
       final beforeCount = observer.pushed.length;
+      // Scroll the target tile into view first — the page is
+      // taller than the default 800×600 test viewport with six
+      // tiles, and an off-screen tap silently misses.
+      final tileFinder = find
+          .ancestor(of: find.text(label), matching: find.byType(ListTile))
+          .first;
+      await tester.scrollUntilVisible(
+        tileFinder,
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
       // Tap the ListTile so we don't depend on which descendant catches
       // the gesture.
-      await tester.tap(
-        find
-            .ancestor(of: find.text(label), matching: find.byType(ListTile))
-            .first,
-      );
+      await tester.tap(tileFinder);
       await tester.pumpAndSettle();
       expect(
         observer.pushed.length,
@@ -149,6 +160,7 @@ void main() {
     await tapAndExpect('外观', 'appearance');
     await tapAndExpect('通知', 'notification');
     await tapAndExpect('数据', 'data');
+    await tapAndExpect('标签', 'tags');
     await tapAndExpect('AI 助手', 'ai');
     await tapAndExpect('关于', 'about');
   });

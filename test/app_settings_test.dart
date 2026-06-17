@@ -33,18 +33,15 @@ void main() {
       expect(parsed.chineseOcrEnabled, isTrue);
     });
 
-    test(
-      'preserves chineseOcrEnabled=false from older settings blobs',
-      () {
-        // Round-trip a pre-1.3.1 settings JSON that explicitly stored
-        // the old default. The new default must NOT override the
-        // user's saved value.
-        final parsed = AppSettings.fromJson(const <String, dynamic>{
-          'chinese_ocr_enabled': false,
-        });
-        expect(parsed.chineseOcrEnabled, isFalse);
-      },
-    );
+    test('preserves chineseOcrEnabled=false from older settings blobs', () {
+      // Round-trip a pre-1.3.1 settings JSON that explicitly stored
+      // the old default. The new default must NOT override the
+      // user's saved value.
+      final parsed = AppSettings.fromJson(const <String, dynamic>{
+        'chinese_ocr_enabled': false,
+      });
+      expect(parsed.chineseOcrEnabled, isFalse);
+    });
 
     test('round-trips chineseOcrEnabled with the rest of the settings', () {
       const original = AppSettings(
@@ -64,6 +61,22 @@ void main() {
       expect(updated.chineseOcrEnabled, isTrue);
       expect(updated.aiAssistantEnabled, original.aiAssistantEnabled);
       expect(updated.aiApiKey, original.aiApiKey);
+    });
+
+    test('round-trips aiInspirationPrompt configuration', () {
+      const original = AppSettings(
+        aiAssistantEnabled: true,
+        aiApiKey: 'sk-x',
+        aiInspirationPrompt: 'Custom prompt for inspirations',
+      );
+      final restored = AppSettings.fromJson(original.toJson());
+      expect(restored.aiInspirationPrompt, 'Custom prompt for inspirations');
+    });
+
+    test('copyWith clears aiInspirationPrompt when clear flag is true', () {
+      const original = AppSettings(aiInspirationPrompt: 'Custom prompt');
+      final updated = original.copyWith(clearAiInspirationPrompt: true);
+      expect(updated.aiInspirationPrompt, isNull);
     });
   });
 }

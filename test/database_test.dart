@@ -140,5 +140,129 @@ void main() {
       expect(results, hasLength(1));
       expect(results.first.text, 'Buy coffee beans');
     });
+
+    test('searches in ocr_text', () async {
+      final db = await AppDatabase.open(path: dbPath());
+      addTearDown(db.close);
+
+      final repo = InspirationRepository(db);
+      await repo.insert(
+        Inspiration(
+          id: '1',
+          text: 'Buy coffee beans',
+          createdAt: DateTime.utc(2026, 6, 13, 8, 0),
+          ocrText: 'This is printed text on a bag of coffee beans',
+        ),
+      );
+      await repo.insert(
+        Inspiration(
+          id: '2',
+          text: 'Walk in the park',
+          createdAt: DateTime.utc(2026, 6, 13, 9, 0),
+        ),
+      );
+
+      final results = await repo.search('printed');
+
+      expect(results, hasLength(1));
+      expect(results.first.text, 'Buy coffee beans');
+      expect(
+        results.first.ocrText,
+        'This is printed text on a bag of coffee beans',
+      );
+    });
+  });
+
+  group('InspirationRepository Soft Delete', () {
+    test('softDelete marks is_deleted and deletedAt', () async {
+      final db = await AppDatabase.open(path: dbPath());
+      addTearDown(db.close);
+
+      final repo = InspirationRepository(db);
+      final inspiration = Inspiration(
+        id: '1',
+        text: 'Test inspiration',
+        createdAt: DateTime.utc(2026, 6, 13, 8, 0),
+      );
+      await repo.insert(inspiration);
+
+      final activeBefore = await repo.getAll();
+      expect(activeBefore, hasLength(1));
+
+      final now = DateTime.utc(2026, 6, 13, 10, 0);
+      await repo.softDelete('1', now);
+
+      final activeAfter = await repo.getAll();
+      expect(activeAfter, isEmpty);
+
+      final trashed = await repo.getAllTrash();
+      expect(trashed, hasLength(1));
+      expect(trashed.first.isDeleted, isTrue);
+      expect(trashed.first.deletedAt, now);
+
+      final countActive = await repo.count();
+      expect(countActive, 0);
+
+      final countTrash = await repo.countTrash();
+      expect(countTrash, 1);
+    });
+
+    test('restore clears is_deleted and deletedAt', () async {
+      final db = await AppDatabase.open(path: dbPath());
+      addTearDown(db.close);
+
+      final repo = InspirationRepository(db);
+      final inspiration = Inspiration(
+        id: '1',
+        text: 'Test inspiration',
+        createdAt: DateTime.utc(2026, 6, 13, 8, 0),
+      );
+      await repo.insert(inspiration);
+
+      await repo.softDelete('1', DateTime.utc(2026, 6, 13, 10, 0));
+      await repo.restore('1');
+
+      final active = await repo.getAll();
+      expect(active, hasLength(1));
+      expect(active.first.isDeleted, isFalse);
+      expect(active.first.deletedAt, isNull);
+    });
+
+    test('purgeTrashOlderThan deletes old trash', () async {
+      final db = await AppDatabase.open(path: dbPath());
+      addTearDown(db.close);
+
+      final repo = InspirationRepository(db);
+      await repo.insert(
+        Inspiration(
+          id: '1',
+          text: 'Inspiration 1',
+          createdAt: DateTime.utc(2026, 6, 13, 8, 0),
+          imagePath: '/path/to/img1',
+        ),
+      );
+      await repo.insert(
+        Inspiration(
+          id: '2',
+          text: 'Inspiration 2',
+          createdAt: DateTime.utc(2026, 6, 13, 8, 0),
+          imagePath: '/path/to/img2',
+        ),
+      );
+
+      // Soft delete both at different times
+      await repo.softDelete('1', DateTime.utc(2026, 5, 1, 10, 0)); // Old
+      await repo.softDelete('2', DateTime.utc(2026, 6, 1, 10, 0)); // Newer
+
+      final cutoff = DateTime.utc(2026, 5, 15, 0, 0);
+      final purgedPaths = await repo.purgeTrashOlderThan(cutoff);
+
+      expect(purgedPaths, contains('/path/to/img1'));
+      expect(purgedPaths, isNot(contains('/path/to/img2')));
+
+      final trash = await repo.getAllTrash();
+      expect(trash, hasLength(1));
+      expect(trash.first.id, '2');
+    });
   });
 }

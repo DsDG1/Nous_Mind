@@ -12,10 +12,7 @@ import 'package:nousmind/services/backup_service.dart';
 ///
 /// When [stats] is `null`, each cell renders an em-dash placeholder.
 class SettingsStatsRow extends StatelessWidget {
-  const SettingsStatsRow({
-    super.key,
-    required this.stats,
-  });
+  const SettingsStatsRow({super.key, required this.stats});
 
   final StorageStats? stats;
 
@@ -33,8 +30,7 @@ class SettingsStatsRow extends StatelessWidget {
     );
 
     final reminderText = stats == null ? '—' : '${stats!.reminderCount}';
-    final inspirationText =
-        stats == null ? '—' : '${stats!.inspirationCount}';
+    final inspirationText = stats == null ? '—' : '${stats!.inspirationCount}';
     final imageText = stats == null
         ? '—'
         : BackupService.formatBytes(stats!.imageBytes);
@@ -65,11 +61,7 @@ class SettingsStatsRow extends StatelessWidget {
             label: '提醒',
           ),
         ),
-        VerticalDivider(
-          width: 9,
-          thickness: 1,
-          color: colors.outlineVariant,
-        ),
+        VerticalDivider(width: 9, thickness: 1, color: colors.outlineVariant),
         Expanded(
           child: cell(
             icon: Icons.lightbulb_outline,
@@ -77,11 +69,7 @@ class SettingsStatsRow extends StatelessWidget {
             label: '灵感',
           ),
         ),
-        VerticalDivider(
-          width: 9,
-          thickness: 1,
-          color: colors.outlineVariant,
-        ),
+        VerticalDivider(width: 9, thickness: 1, color: colors.outlineVariant),
         Expanded(
           child: cell(
             icon: Icons.image_outlined,

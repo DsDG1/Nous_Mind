@@ -1,3 +1,5 @@
+import 'package:nousmind/models/tag.dart';
+
 /// A single reminder entry persisted in local storage.
 class Reminder {
   Reminder({
@@ -8,6 +10,8 @@ class Reminder {
     this.description,
     this.isDeleted = false,
     this.deletedAt,
+    this.tagId,
+    this.previousTagId,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -39,8 +43,28 @@ class Reminder {
   /// When the reminder was soft-deleted. `null` for active rows.
   final DateTime? deletedAt;
 
+  /// Optional id of the [Tag] this reminder belongs to. `null`
+  /// means "no category". The reserved id `Tag.completedId`
+  /// (`'__completed__'`) means the user marked the reminder as
+  /// done via the row's complete button — see [isCompleted].
+  final String? tagId;
+
+  /// Stores the tag id that was active before the reminder was
+  /// marked as completed. When the user un-completes the reminder,
+  /// this value is restored as [tagId] so the original category
+  /// is not lost. `null` when the reminder was uncategorised
+  /// before being completed, or when the reminder is not completed.
+  final String? previousTagId;
+
   /// When the reminder was first created.
   final DateTime createdAt;
+
+  /// True when this reminder has been marked complete by the user.
+  /// The complete behaviour (gray-out, sort-to-bottom, notification
+  /// cancel) all keys off this getter; the underlying state is
+  /// just the [tagId] so the complete flow stays on the same
+  /// machinery as the rest of the tag system.
+  bool get isCompleted => tagId == kCompletedTagId;
 
   Reminder copyWith({
     String? title,
@@ -52,6 +76,10 @@ class Reminder {
     bool? isDeleted,
     DateTime? deletedAt,
     bool clearDeletedAt = false,
+    String? tagId,
+    bool clearTagId = false,
+    String? previousTagId,
+    bool clearPreviousTagId = false,
   }) => Reminder(
     id: id,
     title: title ?? this.title,
@@ -60,20 +88,30 @@ class Reminder {
     description: clearDescription ? null : (description ?? this.description),
     isDeleted: isDeleted ?? this.isDeleted,
     deletedAt: clearDeletedAt ? null : (deletedAt ?? this.deletedAt),
+    tagId: clearTagId ? null : (tagId ?? this.tagId),
+    previousTagId:
+        clearPreviousTagId ? null : (previousTagId ?? this.previousTagId),
     createdAt: createdAt,
   );
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'title': title,
-    'reminder_time': reminderTime.toIso8601String(),
-    'created_at': createdAt.toIso8601String(),
-    if (imagePath != null) 'image_path': imagePath,
-    if (description != null && description!.isNotEmpty)
-      'description': description,
-    if (isDeleted) 'is_deleted': true,
-    if (deletedAt != null) 'deleted_at': deletedAt!.toIso8601String(),
-  };
+  Map<String, dynamic> toJson() {
+    final desc = description;
+    final delAt = deletedAt;
+    final tag = tagId;
+    final prevTag = previousTagId;
+    return {
+      'id': id,
+      'title': title,
+      'reminder_time': reminderTime.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
+      if (imagePath != null) 'image_path': imagePath,
+      if (desc != null && desc.isNotEmpty) 'description': desc,
+      if (isDeleted) 'is_deleted': true,
+      if (delAt != null) 'deleted_at': delAt.toIso8601String(),
+      'tag_id': ?tag,
+      if (prevTag != null) 'previous_tag_id': prevTag,
+    };
+  }
 
   factory Reminder.fromJson(Map<String, dynamic> json) => Reminder(
     id: json['id'] as String,
@@ -86,6 +124,12 @@ class Reminder {
     isDeleted: json['is_deleted'] == true,
     deletedAt: json['deleted_at'] is String
         ? DateTime.tryParse(json['deleted_at'] as String)
+        : null,
+    tagId: (json['tag_id'] as String?)?.isNotEmpty == true
+        ? json['tag_id'] as String
+        : null,
+    previousTagId: (json['previous_tag_id'] as String?)?.isNotEmpty == true
+        ? json['previous_tag_id'] as String
         : null,
     createdAt: json['created_at'] != null
         ? DateTime.parse(json['created_at'] as String)
@@ -101,6 +145,8 @@ class Reminder {
     'is_deleted': isDeleted ? 1 : 0,
     'deleted_at': deletedAt?.toIso8601String(),
     'created_at': createdAt.toIso8601String(),
+    'tag_id': tagId,
+    'previous_tag_id': previousTagId,
   };
 
   factory Reminder.fromMap(Map<String, dynamic> map) => Reminder(
@@ -123,6 +169,12 @@ class Reminder {
     deletedAt: (map['deleted_at'] as String?) == null
         ? null
         : DateTime.tryParse(map['deleted_at'] as String),
+    tagId: (map['tag_id'] as String?)?.isNotEmpty == true
+        ? map['tag_id'] as String
+        : null,
+    previousTagId: (map['previous_tag_id'] as String?)?.isNotEmpty == true
+        ? map['previous_tag_id'] as String
+        : null,
     createdAt: DateTime.parse(map['created_at'] as String),
   );
 }

@@ -56,10 +56,16 @@ class ApplyDraftEvent extends AiAdjustEvent {
     required this.title,
     required this.description,
     required this.reminderTime,
+    this.tagId,
   });
   final String title;
   final String? description;
   final DateTime reminderTime;
+
+  /// Tag id the AI chose for this draft. `null` when the AI didn't
+  /// pick one, or the parser dropped the model-hallucinated id.
+  /// The editor applies this to the form's tag picker.
+  final String? tagId;
 }
 
 /// Asks the view to pop the editor page (typically after a
@@ -75,9 +81,18 @@ class PopEvent extends AiAdjustEvent {
 /// a [RemindersViewModel]) and tests can substitute a one-line fake
 /// without dragging in repositories, the notification service, or
 /// the image store.
-typedef ReminderBatchAdd = Future<int> Function(
-  List<({String title, DateTime reminderTime, String? description})> drafts,
-);
+typedef ReminderBatchAdd =
+    Future<int> Function(
+      List<
+        ({
+          String title,
+          DateTime reminderTime,
+          String? description,
+          String? tagId,
+        })
+      >
+      drafts,
+    );
 
 /// Owns the lifecycle of one "AI 自动调整" invocation in the reminder
 /// editor: pre-flight checks (enabled / key / cooldown / daily
@@ -95,10 +110,10 @@ class ReminderAiAdjustController extends ChangeNotifier {
     required AiUsageGuard guard,
     required AiAnalyzer analyzer,
     required ReminderBatchAdd reminderAdder,
-  })  : _settings = settings,
-        _guard = guard,
-        _analyzer = analyzer,
-        _reminderAdder = reminderAdder;
+  }) : _settings = settings,
+       _guard = guard,
+       _analyzer = analyzer,
+       _reminderAdder = reminderAdder;
 
   final SettingsViewModel _settings;
   final AiUsageGuard _guard;
@@ -106,6 +121,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
   final ReminderBatchAdd _reminderAdder;
 
   bool _isAnalyzing = false;
+  bool _disposed = false;
 
   /// True while the analyzer round-trip is in flight. Drives the
   /// spinner on the AI button via `Selector<…, bool>`.
@@ -134,6 +150,8 @@ class ReminderAiAdjustController extends ChangeNotifier {
     required DateTime reminderTime,
     required String? imagePath,
     required String timezone,
+    List<({String id, String name})> availableTags =
+        const <({String id, String name})>[],
   }) async {
     final settings = _settings.settings;
 
@@ -149,16 +167,18 @@ class ReminderAiAdjustController extends ChangeNotifier {
 
     final verdict = _guard.tryAcquire();
     if (verdict is AcquireCooldown) {
-      _emit(ShowSnackBarEvent(
-        'AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试',
-      ));
+      _emit(
+        ShowSnackBarEvent('AI 刚调用过,请稍候 ${verdict.retryAfter.inSeconds} 秒再试'),
+      );
       return;
     }
     if (verdict is AcquireDailyLimitReached) {
-      _emit(ShowSnackBarEvent(
-        '今日 AI 调用已达上限(${verdict.limit}/${verdict.limit}),'
-        '明天自动恢复或前往设置调整',
-      ));
+      _emit(
+        ShowSnackBarEvent(
+          '今日 AI 调用已达上限(${verdict.limit}/${verdict.limit}),'
+          '明天自动恢复或前往设置调整',
+        ),
+      );
       return;
     }
     final allowed = verdict as AcquireAllowed;
@@ -176,6 +196,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
         timezone: timezone,
         now: clock.now(),
         systemPromptTemplate: settings.aiAdjustPrompt,
+        availableTags: availableTags,
       );
       // recordSuccess is called for every analyzer round-trip that
       // didn't throw, including the empty-drafts case, so the daily
@@ -189,11 +210,14 @@ class ReminderAiAdjustController extends ChangeNotifier {
       }
       if (drafts.length == 1) {
         final draft = drafts.first;
-        _emit(ApplyDraftEvent(
-          title: draft.title,
-          description: draft.description,
-          reminderTime: draft.suggestedTime,
-        ));
+        _emit(
+          ApplyDraftEvent(
+            title: draft.title,
+            description: draft.description,
+            reminderTime: draft.suggestedTime,
+            tagId: draft.tagId,
+          ),
+        );
         _emit(const ShowSnackBarEvent('AI 已自动调整'));
         return;
       }
@@ -207,6 +231,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
                 title: d.title,
                 reminderTime: d.suggestedTime,
                 description: d.description,
+                tagId: d.tagId,
               ),
             )
             .toList(),
@@ -264,6 +289,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
   }
 
   void _setAnalyzing(bool value) {
+    if (_disposed) return;
     if (_isAnalyzing == value) return;
     _isAnalyzing = value;
     notifyListeners();
@@ -276,6 +302,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     // If a confirm / batch prompt is still pending when the view
     // goes away, resolve it with the "cancel" sentinel so the
     // outstanding `await` in `adjust` returns immediately instead

@@ -23,10 +23,13 @@ import 'package:nousmind/services/database.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
 import 'package:nousmind/services/inspiration_repository.dart';
 import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/services/reminder_cleanup_service.dart';
 import 'package:nousmind/services/reminder_repository.dart';
 import 'package:nousmind/services/settings_repository.dart';
+import 'package:nousmind/services/tag_repository.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 
 // ---------------------------------------------------------------------------
 // Settings: in-memory repository + view-model factory.
@@ -154,6 +157,7 @@ class TestDatabase {
     required this.reminderRepository,
     required this.inspirationRepository,
     required this.settingsRepository,
+    required this.tagRepository,
     required this.backupService,
     required this.imageStore,
   });
@@ -163,6 +167,7 @@ class TestDatabase {
   final ReminderRepository reminderRepository;
   final InspirationRepository inspirationRepository;
   final SettingsRepository settingsRepository;
+  final TagRepository tagRepository;
   final BackupService backupService;
   final TestImageStore imageStore;
 
@@ -188,6 +193,7 @@ class TestDatabase {
     final reminderRepo = ReminderRepository(db);
     final inspirationRepo = InspirationRepository(db);
     final settingsRepo = SettingsRepository(db);
+    final tagRepo = TagRepository(db);
     final imageStore = await TestImageStore.create(tempDir);
     final backup = BackupService(
       reminderRepository: reminderRepo,
@@ -201,6 +207,7 @@ class TestDatabase {
       reminderRepository: reminderRepo,
       inspirationRepository: inspirationRepo,
       settingsRepository: settingsRepo,
+      tagRepository: tagRepo,
       backupService: backup,
       imageStore: imageStore,
     );
@@ -249,12 +256,14 @@ class TestRemindersContext {
     required this.settingsVm,
     required this.notifications,
     required this.remindersVm,
+    required this.tagsVm,
   });
 
   final TestDatabase testDb;
   final SettingsViewModel settingsVm;
   final FakeNotificationService notifications;
   final RemindersViewModel remindersVm;
+  final TagsViewModel tagsVm;
 
   static Future<TestRemindersContext> create({
     AppSettings? baseSettings,
@@ -262,17 +271,34 @@ class TestRemindersContext {
     final db = await TestDatabase.create();
     final settingsVm = makeSettingsVm(base: baseSettings);
     final notifications = FakeNotificationService();
+    final cleanup = ReminderCleanupService(
+      repository: db.reminderRepository,
+      notifications: notifications,
+      imageStore: db.imageStore.store,
+      settings: settingsVm,
+    );
     final remindersVm = RemindersViewModel(
       db.reminderRepository,
       notifications,
       settingsVm,
       db.imageStore.store,
+      cleanup,
     );
+    final tagsVm = TagsViewModel(db.tagRepository);
+    // The constructor fires `_bootstrap()` as an un-awaited future, so
+    // unit tests that poke the VM right after construction would race
+    // with bootstrap's `notifyListeners` (and trip ChangeNotifier's
+    // "used after disposed" guard if the test disposes the VM first).
+    // Awaiting refresh() forces bootstrap to complete before create()
+    // returns.
+    await remindersVm.refresh();
+    await tagsVm.refresh();
     return TestRemindersContext._(
       testDb: db,
       settingsVm: settingsVm,
       notifications: notifications,
       remindersVm: remindersVm,
+      tagsVm: tagsVm,
     );
   }
 
@@ -294,6 +320,7 @@ class TestRemindersContext {
 
   Future<void> dispose() async {
     remindersVm.dispose();
+    tagsVm.dispose();
     settingsVm.dispose();
     await testDb.dispose();
   }

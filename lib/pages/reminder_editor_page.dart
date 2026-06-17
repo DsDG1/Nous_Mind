@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/reminder.dart';
 import 'package:nousmind/models/reminder_draft.dart';
+import 'package:nousmind/models/tag.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
 import 'package:nousmind/services/ai_usage_guard.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
@@ -18,8 +19,11 @@ import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/reminder_ai_adjust_controller.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/image_preview.dart';
 import 'package:nousmind/widgets/image_preview_screen.dart';
+import 'package:nousmind/widgets/tag_chip.dart';
+import 'package:nousmind/widgets/tag_filter_sheet.dart';
 
 /// Page used for both creating a new reminder and editing an existing one.
 ///
@@ -49,6 +53,13 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   Timer? _aiPressTimer;
   String _timezone = 'UTC';
 
+  /// Currently selected tag id for this reminder. Initialised from
+  /// the existing reminder when editing; `null` for new reminders
+  /// until the user (or the AI) picks one. Never set to
+  /// [kCompletedTagId] from the editor — the row's complete button
+  /// is the only path to "已完成".
+  String? _tagId;
+
   /// Reference to the AI flow controller supplied by the local
   /// [ChangeNotifierProvider] in [build]. The state's own `context`
   /// sits *above* that provider, so [_AiControllerScope] hands the
@@ -67,6 +78,14 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     );
     _reminderTime = widget.initial?.reminderTime ?? _defaultTime();
     _imagePath = widget.initial?.imagePath;
+    final initialTag = widget.initial?.tagId;
+    // Don't show the "已完成" pseudo-tag in the editor — that
+    // category is set by the row's complete button, not by manual
+    // editing. Clearing it on open means re-saving the row
+    // doesn't accidentally re-mark it as done.
+    _tagId = (initialTag != null && initialTag != kCompletedTagId)
+        ? initialTag
+        : null;
     _resolveTimezone();
   }
 
@@ -126,10 +145,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   void _openImagePreview() {
     if (_imagePath == null) return;
     Navigator.of(context, rootNavigator: true).push(
-      openImagePreviewRoute(
-        imagePath: _imagePath!,
-        heroTag: _imageHeroTag(),
-      ),
+      openImagePreviewRoute(imagePath: _imagePath!, heroTag: _imageHeroTag()),
     );
   }
 
@@ -171,12 +187,23 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
   Future<void> _runAiAdjust() async {
     final controller = _aiController;
     if (controller == null) return;
+    // Pass the current tag list (minus the "已完成" pseudo-tag,
+    // which is the AI's own completion signal and should not be a
+    // pickable option in the prompt's catalogue) so the model can
+    // pick a real category. The parser validates the returned id
+    // against this set, so a hallucination is dropped silently.
+    final tagsVm = context.read<TagsViewModel>();
+    final availableTags = <({String id, String name})>[
+      for (final t in tagsVm.tags)
+        if (t.id != kCompletedTagId) (id: t.id, name: t.name),
+    ];
     await controller.adjust(
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       reminderTime: _reminderTime,
       imagePath: _imagePath,
       timezone: _timezone,
+      availableTags: availableTags,
     );
   }
 
@@ -192,6 +219,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         :final title,
         :final description,
         :final reminderTime,
+        :final tagId,
       ):
         setState(() {
           _titleController.text = title;
@@ -199,6 +227,12 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
             _descriptionController.text = description;
           }
           _reminderTime = reminderTime;
+          // Only overwrite the form's tag if the AI picked one. A
+          // null tagId means "no category" and we leave the
+          // user's existing choice alone.
+          if (tagId != null) {
+            _tagId = tagId;
+          }
         });
       case PopEvent():
         context.pop();
@@ -307,6 +341,135 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
     });
   }
 
+  /// Opens the tag picker sheet. Resolves the "+ 新建标签" path
+  /// inline: pops a [Tag] and the editor stores the new id. The
+  /// `__completed__` id is filtered out at the sheet level, but a
+  /// defensive `null` check here is cheap insurance.
+  Future<void> _pickTag() async {
+    final tagsVm = context.read<TagsViewModel>();
+    final tags = tagsVm.tags
+        .where((t) => t.id != kCompletedTagId)
+        .toList(growable: false);
+    final selected = await TagFilterSheet.show(
+      context,
+      selectedTagId: _tagId,
+      tags: tags,
+      allowCreateNew: true,
+      title: '选择标签',
+    );
+    if (!mounted) return;
+    if (selected == null) {
+      // Dismissed — do nothing, keep current tag selection
+      return;
+    }
+    if (selected == TagFilterSheet.allTagsSentinel) {
+      if (_tagId != null) setState(() => _tagId = null);
+      return;
+    }
+    if (selected == TagFilterSheet.createNewSentinel) {
+      // Open the add dialog inline. We reuse the dialog from the
+      // tag settings page by going through the view model — the
+      // settings subpage owns the dialog widget, but the public
+      // `add()` method is enough to add a tag without navigating
+      // away. The user gets the same color palette via a quick
+      // AlertDialog (see [_showAddTagDialog] below).
+      final created = await _showAddTagDialog();
+      if (created == null || !mounted) return;
+      setState(() => _tagId = created.id);
+      return;
+    }
+    setState(() => _tagId = selected);
+  }
+
+  void _clearTag() {
+    if (_tagId == null) return;
+    setState(() => _tagId = null);
+  }
+
+  /// Inline "add a tag" dialog for the editor's "+ 新建标签" path.
+  /// Kept simple: a text field and the same color palette as the
+  /// settings subpage. The palette is duplicated here to avoid a
+  /// wider refactor of the settings page (which owns its own
+  /// dialog with the same palette); the two are kept in sync via
+  /// the shared `kTagPalette` constant.
+  Future<Tag?> _showAddTagDialog() async {
+    final tagsVm = context.read<TagsViewModel>();
+    final nameController = TextEditingController();
+    int color = kTagPalette.first;
+    final result = await showDialog<dynamic>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('新建标签'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  maxLength: 12,
+                  textInputAction: TextInputAction.done,
+                  decoration: const InputDecoration(
+                    labelText: '名称',
+                    border: OutlineInputBorder(),
+                    counterText: '',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    for (final c in kTagPalette)
+                      GestureDetector(
+                        onTap: () => setLocal(() => color = c),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(c),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: color == c
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : Colors.black26,
+                              width: color == c ? 3 : 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = nameController.text.trim();
+                  if (name.isEmpty) return;
+                  // The view model returns the created tag (or
+                  // null on dedup / cap). We hand the work off so
+                  // all the persistence / error handling lives in
+                  // one place.
+                  Navigator.of(ctx).pop(_PendingTag(name: name, color: color));
+                },
+                child: const Text('创建'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (result == null || result is! _PendingTag) return null;
+    return tagsVm.add(name: result.name, color: result.color);
+  }
+
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
@@ -336,6 +499,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         reminderTime: time,
         imagePath: newImagePath,
         description: description.isEmpty ? null : description,
+        tagId: _tagId,
       );
     } else {
       // Editing a reminder that was sitting in the trash is treated
@@ -353,6 +517,11 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
           clearDescription: description.isEmpty,
           isDeleted: false,
           clearDeletedAt: true,
+          // Preserve "已完成" if the user opens the editor on a
+          // completed row but doesn't touch the tag chip — the
+          // row stays in the completed bucket.
+          tagId: _tagId ?? (existing.isCompleted ? existing.tagId : null),
+          clearTagId: _tagId == null && !existing.isCompleted,
         ),
       );
       if (previousImagePath != null && previousImagePath != newImagePath) {
@@ -477,6 +646,12 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
                 ),
               ),
               const SizedBox(height: 16),
+              _TagPickerCard(
+                tagId: _tagId,
+                onPick: _pickTag,
+                onClear: _tagId == null ? null : _clearTag,
+              ),
+              const SizedBox(height: 16),
               if (_picking)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -523,6 +698,18 @@ class _BatchConfirmSheetState extends State<_BatchConfirmSheet> {
         _selected[i] = select;
       }
     });
+  }
+
+  Future<void> _editDraft(int index) async {
+    final updated = await showDialog<ReminderDraft>(
+      context: context,
+      builder: (ctx) => _DraftEditDialog(draft: widget.drafts[index]),
+    );
+    if (updated != null) {
+      setState(() {
+        widget.drafts[index] = updated;
+      });
+    }
   }
 
   @override
@@ -574,6 +761,7 @@ class _BatchConfirmSheetState extends State<_BatchConfirmSheet> {
                     draft: draft,
                     selected: _selected[index],
                     onChanged: (v) => _toggle(index, v),
+                    onEdit: () => _editDraft(index),
                   );
                 },
               ),
@@ -612,11 +800,13 @@ class _DraftTile extends StatelessWidget {
     required this.draft,
     required this.selected,
     required this.onChanged,
+    required this.onEdit,
   });
 
   final ReminderDraft draft;
   final bool selected;
   final ValueChanged<bool?> onChanged;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -624,6 +814,7 @@ class _DraftTile extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     return InkWell(
       onTap: () => onChanged(!selected),
+      onLongPress: onEdit,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
@@ -635,13 +826,23 @@ class _DraftTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    draft.title,
-                    style: textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          draft.title,
+                          style: textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (draft.tagId != null) ...<Widget>[
+                        const SizedBox(width: 8),
+                        _DraftTagChip(tagId: draft.tagId!),
+                      ],
+                    ],
                   ),
                   if (draft.description != null &&
                       draft.description!.trim().isNotEmpty) ...[
@@ -682,10 +883,37 @@ class _DraftTile extends StatelessWidget {
                 ],
               ),
             ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: '编辑',
+              onPressed: onEdit,
+            ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Renders the AI-chosen tag for a batch confirm draft. Resolves
+/// the id through the [TagsViewModel] so the chip matches the
+/// user's palette; falls back to nothing for hallucinated ids the
+/// parser dropped, since `_DraftTile` only renders when
+/// `draft.tagId != null` and the parser enforces that.
+class _DraftTagChip extends StatelessWidget {
+  const _DraftTagChip({required this.tagId});
+
+  final String tagId;
+
+  @override
+  Widget build(BuildContext context) {
+    final tags = context.read<TagsViewModel>().tags;
+    for (final t in tags) {
+      if (t.id == tagId) {
+        return TagChip(tag: t, compact: true);
+      }
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -734,4 +962,250 @@ class _AiControllerScopeState extends State<_AiControllerScope> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// Card used in the editor to display and edit the currently
+/// selected tag. Shows the resolved [TagChip] when a tag is
+/// chosen, "未分类" when none is, and a chevron that opens the
+/// tag picker. The `onClear` trailing icon lets the user drop the
+/// current selection without going through the sheet.
+class _TagPickerCard extends StatelessWidget {
+  const _TagPickerCard({
+    required this.tagId,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final String? tagId;
+  final VoidCallback onPick;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final tagsVm = context.watch<TagsViewModel>();
+    Tag? match;
+    if (tagId != null) {
+      for (final t in tagsVm.tags) {
+        if (t.id == tagId) {
+          match = t;
+          break;
+        }
+      }
+    }
+    return Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(Icons.label_outline, color: colors.primary),
+        title: const Text('标签'),
+        subtitle: match == null
+            ? Text('未分类', style: TextStyle(color: colors.onSurfaceVariant))
+            : Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: TagChip(tag: match),
+              ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (onClear != null)
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: '清除标签',
+                onPressed: onClear,
+              ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
+        onTap: onPick,
+      ),
+    );
+  }
+}
+
+/// Internal sentinel returned from the inline "新建标签" dialog
+/// so the editor can distinguish "user picked an existing tag"
+/// (a real [Tag.id] string) from "user created a brand new tag
+/// (we need to add it through the view model and then use the
+/// returned id)".
+class _PendingTag {
+  const _PendingTag({required this.name, required this.color});
+  final String name;
+  final int color;
+}
+
+class _DraftEditDialog extends StatefulWidget {
+  const _DraftEditDialog({required this.draft});
+
+  final ReminderDraft draft;
+
+  @override
+  State<_DraftEditDialog> createState() => _DraftEditDialogState();
+}
+
+class _DraftEditDialogState extends State<_DraftEditDialog> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late DateTime _suggestedTime;
+  String? _tagId;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.draft.title);
+    _descriptionController = TextEditingController(
+      text: widget.draft.description ?? '',
+    );
+    _suggestedTime = widget.draft.suggestedTime;
+    _tagId = widget.draft.tagId;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDateTime() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _suggestedTime,
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_suggestedTime),
+    );
+    if (pickedTime == null) return;
+    setState(() {
+      _suggestedTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
+  }
+
+  Future<void> _pickTag() async {
+    final tagsVm = context.read<TagsViewModel>();
+    final tags = tagsVm.tags
+        .where((t) => t.id != kCompletedTagId)
+        .toList(growable: false);
+    final selected = await TagFilterSheet.show(
+      context,
+      selectedTagId: _tagId,
+      tags: tags,
+      allowCreateNew: false,
+      title: '选择标签',
+    );
+    if (!mounted) return;
+    if (selected == null) {
+      // Cancelled/dismissed — do nothing
+      return;
+    }
+    if (selected == TagFilterSheet.allTagsSentinel) {
+      setState(() => _tagId = null);
+      return;
+    }
+    setState(() => _tagId = selected);
+  }
+
+  void _submit() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    final desc = _descriptionController.text.trim();
+    Navigator.of(context).pop(
+      widget.draft.copyWith(
+        title: title,
+        description: desc.isEmpty ? null : desc,
+        suggestedTime: _suggestedTime,
+        tagId: _tagId,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final tagsVm = context.watch<TagsViewModel>();
+    Tag? match;
+    if (_tagId != null) {
+      for (final t in tagsVm.tags) {
+        if (t.id == _tagId) {
+          match = t;
+          break;
+        }
+      }
+    }
+
+    return AlertDialog(
+      title: const Text('编辑提醒内容'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            TextField(
+              controller: _titleController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '标题',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: '描述(可选)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: Icon(Icons.access_time, color: colors.primary),
+                title: const Text('提醒时间'),
+                subtitle: Text(formatDateTime(_suggestedTime)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _pickDateTime,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: Icon(Icons.label_outline, color: colors.primary),
+                title: const Text('标签'),
+                subtitle: match == null
+                    ? Text(
+                        '未分类',
+                        style: TextStyle(color: colors.onSurfaceVariant),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: TagChip(tag: match),
+                      ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _pickTag,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
 }

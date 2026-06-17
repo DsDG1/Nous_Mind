@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/color_dot.dart';
 import 'package:nousmind/widgets/settings_section.dart';
 import 'package:nousmind/widgets/settings_stats_card.dart';
@@ -22,6 +23,7 @@ class SettingsPage extends StatelessWidget {
         child: Selector<SettingsViewModel, _SettingsForSubtitle>(
           selector: (_, vm) => _SettingsForSubtitle.from(vm.settings),
           builder: (context, settings, _) {
+            final tagsVm = context.watch<TagsViewModel>();
             return ListView(
               children: <Widget>[
                 const SettingsStatsCard(),
@@ -32,9 +34,7 @@ class SettingsPage extends StatelessWidget {
                     SettingsTile(
                       title: '外观',
                       subtitle: _appearanceSubtitle(settings),
-                      leading: ColorDot(
-                        color: settings.seedColor.color,
-                      ),
+                      leading: ColorDot(color: settings.seedColor.color),
                       onTap: () => context.push('/settings/appearance'),
                     ),
                     SettingsTile(
@@ -48,6 +48,12 @@ class SettingsPage extends StatelessWidget {
                       subtitle: '备份、恢复与清理',
                       leading: const Icon(Icons.storage_outlined),
                       onTap: () => context.push('/settings/data'),
+                    ),
+                    SettingsTile(
+                      title: '标签',
+                      subtitle: _tagsSubtitle(tagsVm),
+                      leading: const Icon(Icons.label_outline),
+                      onTap: () => context.push('/settings/tags'),
                     ),
                     SettingsTile(
                       title: 'AI 助手',
@@ -69,6 +75,15 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _tagsSubtitle(TagsViewModel vm) {
+    if (!vm.isLoaded) return '加载中…';
+    // 4 built-in defaults + 1 已完成 + N custom = the user-visible
+    // count. The settings subpage labels the 4 + 1 separately, so
+    // the "X 个标签" copy on the home tile is intentionally a
+    // simple total.
+    return '${vm.tags.length} 个标签';
   }
 
   static String _appearanceSubtitle(_SettingsForSubtitle settings) {

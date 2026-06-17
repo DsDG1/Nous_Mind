@@ -30,6 +30,7 @@ import 'package:nousmind/models/reminder.dart';
 import 'package:nousmind/pages/reminders_home_page.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/empty_state.dart';
 import 'package:nousmind/widgets/reminder_list_item.dart';
 
@@ -47,10 +48,7 @@ class _RecordingNavigatorObserver extends NavigatorObserver {
   }
 }
 
-GoRouter _makeRouter({
-  required Widget home,
-  NavigatorObserver? observer,
-}) {
+GoRouter _makeRouter({required Widget home, NavigatorObserver? observer}) {
   return GoRouter(
     initialLocation: '/',
     observers: observer == null ? const <NavigatorObserver>[] : [observer],
@@ -58,9 +56,7 @@ GoRouter _makeRouter({
       GoRoute(path: '/', builder: (_, _) => home),
       GoRoute(
         path: '/editor',
-        builder: (_, _) => const Scaffold(
-          body: Center(child: Text('editor')),
-        ),
+        builder: (_, _) => const Scaffold(body: Center(child: Text('editor'))),
       ),
     ],
   );
@@ -69,12 +65,14 @@ GoRouter _makeRouter({
 Widget _wrapForRemindersPage({
   required RemindersViewModel remindersVm,
   required SettingsViewModel settingsVm,
+  required TagsViewModel tagsVm,
   required Widget child,
 }) {
   return MultiProvider(
     providers: [
       ChangeNotifierProvider<RemindersViewModel>.value(value: remindersVm),
       ChangeNotifierProvider<SettingsViewModel>.value(value: settingsVm),
+      ChangeNotifierProvider<TagsViewModel>.value(value: tagsVm),
     ],
     child: child,
   );
@@ -91,8 +89,7 @@ Future<void> pumpHomeAfterBootstrap(
   // Real async work — FFI sqflite and ChangeNotifier plumbing.
   await tester.runAsync(() async {
     final deadline = DateTime.now().add(const Duration(seconds: 2));
-    while (!ctx.remindersVm.isLoaded &&
-        DateTime.now().isBefore(deadline)) {
+    while (!ctx.remindersVm.isLoaded && DateTime.now().isBefore(deadline)) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
   });
@@ -111,15 +108,13 @@ void main() {
     await ctx.dispose();
   });
 
-  Future<void> pumpHome(
-    WidgetTester tester, {
-    GoRouter? router,
-  }) async {
+  Future<void> pumpHome(WidgetTester tester, {GoRouter? router}) async {
     final widget = router == null
         ? MaterialApp(
             home: _wrapForRemindersPage(
               remindersVm: ctx.remindersVm,
               settingsVm: ctx.settingsVm,
+              tagsVm: ctx.tagsVm,
               child: const RemindersHomePage(),
             ),
           )
@@ -173,6 +168,7 @@ void main() {
       home: _wrapForRemindersPage(
         remindersVm: ctx.remindersVm,
         settingsVm: ctx.settingsVm,
+        tagsVm: ctx.tagsVm,
         child: const RemindersHomePage(),
       ),
       observer: observer,
@@ -183,11 +179,7 @@ void main() {
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
 
-    expect(
-      observer.pushed,
-      isNotEmpty,
-      reason: 'FAB tap should push a route',
-    );
+    expect(observer.pushed, isNotEmpty, reason: 'FAB tap should push a route');
     expect(find.text('editor'), findsOneWidget);
   });
 

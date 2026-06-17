@@ -34,18 +34,15 @@ GoRouter makeTestRouter({required String initialLocation}) {
       ),
       GoRoute(
         path: '/editor',
-        builder: (_, state) =>
-            Scaffold(body: Text('editor: ${state.extra}')),
+        builder: (_, state) => Scaffold(body: Text('editor: ${state.extra}')),
       ),
       GoRoute(
         path: '/settings/appearance',
-        builder: (_, _) =>
-            const Scaffold(body: Text('appearance')),
+        builder: (_, _) => const Scaffold(body: Text('appearance')),
       ),
       GoRoute(
         path: '/settings/notification',
-        builder: (_, _) =>
-            const Scaffold(body: Text('notification')),
+        builder: (_, _) => const Scaffold(body: Text('notification')),
       ),
       GoRoute(
         path: '/settings/data',

@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:nested/nested.dart';
 import 'package:provider/provider.dart';
 
+import 'package:nousmind/app/app_error_hooks.dart';
+import 'package:nousmind/app/database_error_app.dart';
+import 'package:nousmind/app/notification_action_router.dart';
 import 'package:nousmind/models/app_settings.dart';
 import 'package:nousmind/router.dart';
 import 'package:nousmind/services/ai_analyzer.dart';
@@ -20,35 +21,20 @@ import 'package:nousmind/services/inspiration_image_store.dart';
 import 'package:nousmind/services/inspiration_repository.dart';
 import 'package:nousmind/services/notification_service.dart';
 import 'package:nousmind/services/quick_settings_tile_bridge.dart';
+import 'package:nousmind/services/reminder_cleanup_service.dart';
 import 'package:nousmind/services/reminder_repository.dart';
 import 'package:nousmind/services/settings_repository.dart';
+import 'package:nousmind/services/tag_repository.dart';
 import 'package:nousmind/viewmodels/inspirations_view_model.dart';
 import 'package:nousmind/viewmodels/reminders_view_model.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
+import 'package:nousmind/viewmodels/tags_view_model.dart';
 import 'package:nousmind/widgets/reminder_popup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Capture uncaught framework and platform errors so the About page can
-  // surface them. These handlers run outside the widget tree, hence the
-  // global handle installed later in the Provider.
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-    globalErrorLog?.record(
-      source: 'FlutterError',
-      error: details.exceptionAsString(),
-      stackTrace: details.stack,
-    );
-  };
-  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    globalErrorLog?.record(
-      source: 'PlatformDispatcher',
-      error: error,
-      stackTrace: stack,
-    );
-    return true;
-  };
+  installAppErrorHooks();
 
   AppDatabase? database;
   try {
@@ -59,18 +45,20 @@ Future<void> main() async {
       error: error,
       stackTrace: stackTrace,
     );
-    runApp(const _DatabaseErrorApp());
+    runApp(const DatabaseErrorApp());
     return;
   }
   final settingsRepository = SettingsRepository(database);
   final initialSettings = await settingsRepository.load();
   final reminderRepository = ReminderRepository(database);
   final inspirationRepository = InspirationRepository(database);
+  final tagRepository = TagRepository(database);
   final imageStore = await InspirationImageStore.create();
   final notifications = NotificationService();
+  const actionRouter = NotificationActionRouter();
   await notifications.init(
     onTapBody: () => router.go('/'),
-    onAction: _handleNotificationAction,
+    onAction: actionRouter.route,
   );
   final timezone = await _readTimezone();
 
@@ -87,6 +75,7 @@ Future<void> main() async {
       initialSettings: initialSettings,
       reminderRepository: reminderRepository,
       inspirationRepository: inspirationRepository,
+      tagRepository: tagRepository,
       imageStore: imageStore,
       notifications: notifications,
       aiAnalyzer: DeepSeekAnalyzer(),
@@ -110,61 +99,6 @@ Future<String> _readTimezone() async {
   }
 }
 
-/// Routes a notification action button press to the right
-/// [RemindersViewModel] call. Snooze pushes the reminder's fire time
-/// forward by the user's current [SnoozeDuration] and re-schedules;
-/// complete soft-deletes the reminder so the user can still recover
-/// it from the trash page if the press was a misclick.
-///
-/// The handler runs in two cases:
-///  1. The app is in the foreground when the user taps the action.
-///  2. The app was cold-launched by the action (handled inside
-///     [NotificationService.init] via `getNotificationAppLaunchDetails`).
-///
-/// In both cases the Provider tree may or may not be mounted yet at
-/// the very first frame; the helper gracefully no-ops if it cannot
-/// find the view model.
-void _handleNotificationAction(NotificationResponse response) {
-  final action = response.actionId;
-  final reminderId = response.payload;
-  if (action == null || reminderId == null || reminderId.isEmpty) return;
-  final navigatorContext = rootNavigatorKey.currentContext;
-  if (navigatorContext == null) return;
-  try {
-    final reminders = Provider.of<RemindersViewModel>(
-      navigatorContext,
-      listen: false,
-    );
-    final settings = Provider.of<SettingsViewModel>(
-      navigatorContext,
-      listen: false,
-    );
-    final messenger = ScaffoldMessenger.of(navigatorContext);
-    switch (action) {
-      case NotificationService.kSnoozeActionId:
-        unawaited(
-          reminders.snoozeReminder(
-            reminderId,
-            settings.settings.snoozeDuration.duration,
-          ),
-        );
-        break;
-      case NotificationService.kCompleteActionId:
-        unawaited(reminders.softDelete(reminderId));
-        messenger
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('已移入回收站')));
-        break;
-    }
-  } on Exception catch (error, stackTrace) {
-    developer.log(
-      'Failed to handle notification action',
-      error: error,
-      stackTrace: stackTrace,
-    );
-  }
-}
-
 class RemindersApp extends StatefulWidget {
   const RemindersApp({
     super.key,
@@ -172,6 +106,7 @@ class RemindersApp extends StatefulWidget {
     required this.initialSettings,
     required this.reminderRepository,
     required this.inspirationRepository,
+    required this.tagRepository,
     required this.imageStore,
     required this.notifications,
     required this.aiAnalyzer,
@@ -182,6 +117,7 @@ class RemindersApp extends StatefulWidget {
   final AppSettings initialSettings;
   final ReminderRepository reminderRepository;
   final InspirationRepository inspirationRepository;
+  final TagRepository tagRepository;
   final InspirationImageStore imageStore;
   final NotificationService notifications;
   final AiAnalyzer aiAnalyzer;
@@ -204,6 +140,14 @@ class _RemindersAppState extends State<RemindersApp>
       settingsRepository: widget.settingsRepository,
       imageStore: widget.imageStore,
     );
+    // Tag view model warm-up mirrors the backup stats call above:
+    // a single async read of the `tags` table so the editor,
+    // home page, and settings subpage can paint real tag data on
+    // first entry instead of the empty placeholder. The provider
+    // is lazy (it boots on first `context.read/watch`), so this is
+    // purely about the cold-start timing.
+    // ignore: unawaited_futures
+    widget.tagRepository.getAll();
     // Warm the stats cache so the settings page can paint real numbers
     // on its first entry instead of the dash placeholder.
     unawaited(_backup.refreshStats());
@@ -227,6 +171,10 @@ class _RemindersAppState extends State<RemindersApp>
       return;
     }
     Provider.of<RemindersViewModel>(
+      navigatorContext,
+      listen: false,
+    ).onAppResumed();
+    Provider.of<InspirationsViewModel>(
       navigatorContext,
       listen: false,
     ).onAppResumed();
@@ -254,11 +202,18 @@ class _RemindersAppState extends State<RemindersApp>
         ChangeNotifierProvider<RemindersViewModel>(
           create: (context) {
             final settings = context.read<SettingsViewModel>();
+            final cleanup = ReminderCleanupService(
+              repository: widget.reminderRepository,
+              notifications: widget.notifications,
+              imageStore: widget.imageStore,
+              settings: settings,
+            );
             final vm = RemindersViewModel(
               widget.reminderRepository,
               widget.notifications,
               settings,
               widget.imageStore,
+              cleanup,
             );
             vm.onReminderDue = (reminder) {
               final navigatorState = rootNavigatorKey.currentState;
@@ -280,10 +235,20 @@ class _RemindersAppState extends State<RemindersApp>
           },
         ),
         ChangeNotifierProvider<InspirationsViewModel>(
-          create: (_) => InspirationsViewModel(
+          create: (context) => InspirationsViewModel(
             widget.inspirationRepository,
             widget.imageStore,
+            context.read<SettingsViewModel>(),
           ),
+        ),
+        // Tags live in their own view model so the editor, home
+        // page, and settings subpage can all `context.watch` the
+        // same in-memory list. Inserted before the AI provider so
+        // the AI controller (which is created lazily by the
+        // editor's local provider) can read tags via
+        // `context.read<TagsViewModel>()`.
+        ChangeNotifierProvider<TagsViewModel>(
+          create: (_) => TagsViewModel(widget.tagRepository),
         ),
         ChangeNotifierProvider<ErrorLogService>(
           create: (_) => attachGlobalErrorLog(ErrorLogService()),
@@ -303,6 +268,7 @@ class _RemindersAppState extends State<RemindersApp>
         Provider<InspirationImageStore>.value(value: widget.imageStore),
         Provider<NotificationService>.value(value: widget.notifications),
         Provider<BackupService>.value(value: _backup),
+        Provider<TagRepository>.value(value: widget.tagRepository),
       ],
       child: Selector<SettingsViewModel, _ThemeTuple>(
         selector: (_, vm) => _ThemeTuple(
@@ -347,39 +313,4 @@ class _ThemeTuple {
 
   @override
   int get hashCode => Object.hash(mode, seed);
-}
-
-class _DatabaseErrorApp extends StatelessWidget {
-  const _DatabaseErrorApp();
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'NousMind',
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.storage, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  '数据库初始化失败',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '请重启应用。如问题持续，请卸载后重新安装。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

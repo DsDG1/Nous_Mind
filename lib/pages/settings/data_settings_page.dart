@@ -41,10 +41,13 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
 
   Future<void> _refreshTrashCount() async {
     // Cheap refresh that only re-counts the trash. We do this on every
-    // build via a Selector below, so calling it manually is only needed
+    // build via a Consumer2 below, so calling it manually is only needed
     // when we return from the trash page (which is handled by the
     // route-pop callback in `_openTrash`).
-    await context.read<RemindersViewModel>().refreshTrashCount();
+    final rVm = context.read<RemindersViewModel>();
+    final iVm = context.read<InspirationsViewModel>();
+    await rVm.refreshTrashCount();
+    await iVm.refreshTrashCount();
   }
 
   Future<void> _openTrash() async {
@@ -256,8 +259,9 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                 icon: Icons.storage_outlined,
                 children: <Widget>[
                   ValueListenableBuilder<StorageStats?>(
-                    valueListenable:
-                        context.read<BackupService>().statsNotifier,
+                    valueListenable: context
+                        .read<BackupService>()
+                        .statsNotifier,
                     builder: (context, stats, _) {
                       if (stats == null) {
                         return const ListTile(
@@ -277,12 +281,12 @@ class _DataSettingsPageState extends State<DataSettingsPage> {
                 title: '回收站',
                 icon: Icons.delete_outline,
                 children: <Widget>[
-                  Selector<RemindersViewModel, int>(
-                    selector: (_, vm) => vm.trashCount,
-                    builder: (context, trashCount, _) {
-                      final subtitle = trashCount == 0
-                          ? '已删提醒会在此保留 30 天'
-                          : '$trashCount 项 · 最早将在 1 天后清除';
+                  Consumer2<RemindersViewModel, InspirationsViewModel>(
+                    builder: (context, rVm, iVm, _) {
+                      final total = rVm.trashCount + iVm.trashCount;
+                      final subtitle = total == 0
+                          ? '已删提醒与灵感会在此保留 30 天'
+                          : '$total 项 · 最早将在 1 天后清除';
                       return SettingsTile(
                         leading: const Icon(Icons.restore_from_trash_outlined),
                         title: '回收站',

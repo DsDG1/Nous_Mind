@@ -55,6 +55,17 @@ class SettingsViewModel extends ChangeNotifier {
   Future<void> setAiAssistantEnabled(bool value) =>
       _update(_settings.copyWith(aiAssistantEnabled: value));
 
+  /// Records the user's one-time consent to the AI assistant (User
+  /// Agreement + Privacy Policy) and flips the switch on in the same
+  /// write. Listeners therefore never see a half-applied state where
+  /// the switch is on but the consent flag is still `null`.
+  Future<void> acceptAiConsent() => _update(
+    _settings.copyWith(
+      aiAssistantEnabled: true,
+      aiConsentAcceptedAt: DateTime.now(),
+    ),
+  );
+
   /// Persists the AI assistant API key. Whitespace-only values and `null`
   /// both clear the key, so the storage layer never sees a blank string.
   Future<void> setAiApiKey(String? value) => _update(
@@ -91,6 +102,17 @@ class SettingsViewModel extends ChangeNotifier {
       return _update(_settings.copyWith(clearAiAdjustPrompt: true));
     }
     return _update(_settings.copyWith(aiAdjustPrompt: trimmed));
+  }
+
+  /// Persists the user's custom system prompt template for the "灵感分析"
+  /// flow. `null` or whitespace clears the field, restoring the
+  /// built-in default (`DeepSeekAnalyzer.defaultInspirationAnalysisPromptTemplate`).
+  Future<void> setAiInspirationPrompt(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return _update(_settings.copyWith(clearAiInspirationPrompt: true));
+    }
+    return _update(_settings.copyWith(aiInspirationPrompt: trimmed));
   }
 
   // ---------------------------------------------------------------------------

@@ -18,9 +18,12 @@ import 'package:nousmind/pages/settings/local_ocr_settings_page.dart';
 import 'package:nousmind/pages/settings/notification_settings_page.dart';
 import 'package:nousmind/pages/settings/about_settings_page.dart';
 import 'package:nousmind/pages/settings/privacy_policy_page.dart';
+import 'package:nousmind/pages/settings/tag_settings_page.dart';
 import 'package:nousmind/pages/settings/trash_page.dart';
 import 'package:nousmind/pages/settings/user_agreement_page.dart';
+import 'package:nousmind/pages/settings/tutorial_page.dart';
 import 'package:nousmind/pages/settings_page.dart';
+import 'package:nousmind/pages/inspirations_ai_page.dart';
 import 'package:nousmind/widgets/circular_reveal_clip.dart';
 
 /// Navigator keys — separate per branch so each tab maintains its own
@@ -36,6 +39,29 @@ final GlobalKey<NavigatorState> _inspirationsBranchKey =
 final GlobalKey<NavigatorState> _settingsBranchKey = GlobalKey<NavigatorState>(
   debugLabel: 'settings',
 );
+
+/// Wraps a settings sub-page in a [PopScope] so the Android 14+ predictive
+/// back gesture only pops the topmost route, not the entire
+/// [StatefulShellRoute.indexedStack] branch. This works around a known
+/// interaction between go_router's `StatefulShellRoute` and Flutter's
+/// `PredictiveBackNavigator` where a single back gesture from a deep
+/// sub-route would otherwise pop every nested settings page at once.
+Page<T> _settingsPage<T>({required LocalKey key, required Widget child}) {
+  return MaterialPage<T>(
+    key: key,
+    child: Builder(
+      builder: (context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) {
+            context.pop();
+          }
+        },
+        child: child,
+      ),
+    ),
+  );
+}
 
 /// The application's [GoRouter]. Each tab gets its own [StatefulShellBranch]
 /// so switching tabs preserves the per-tab Navigator stack (an open editor
@@ -123,6 +149,11 @@ final GoRouter router = GoRouter(
                     initial: state.extra as Inspiration?,
                   ),
                 ),
+                GoRoute(
+                  path: 'ai',
+                  parentNavigatorKey: rootNavigatorKey,
+                  builder: (context, state) => const InspirationsAiPage(),
+                ),
               ],
             ),
           ],
@@ -132,66 +163,121 @@ final GoRouter router = GoRouter(
           routes: <RouteBase>[
             GoRoute(
               path: '/settings',
-              builder: (context, state) => const SettingsPage(),
+              pageBuilder: (context, state) => _settingsPage<void>(
+                key: state.pageKey,
+                child: const SettingsPage(),
+              ),
               routes: <RouteBase>[
                 GoRoute(
                   path: 'appearance',
-                  builder: (context, state) => const AppearanceSettingsPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const AppearanceSettingsPage(),
+                  ),
                 ),
                 GoRoute(
                   path: 'notification',
-                  builder: (context, state) => const NotificationSettingsPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const NotificationSettingsPage(),
+                  ),
                 ),
                 GoRoute(
                   path: 'data',
-                  builder: (context, state) => const DataSettingsPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const DataSettingsPage(),
+                  ),
                   routes: <RouteBase>[
                     GoRoute(
                       path: 'trash',
-                      builder: (context, state) => const TrashPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const TrashPage(),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
+                  path: 'tags',
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const TagSettingsPage(),
+                  ),
+                ),
+                GoRoute(
                   path: 'ai',
-                  builder: (context, state) => const AiSettingsPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const AiSettingsPage(),
+                  ),
                   routes: <RouteBase>[
                     GoRoute(
                       path: 'deepseek',
-                      builder: (context, state) => const DeepSeekSettingsPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const DeepSeekSettingsPage(),
+                      ),
                     ),
                     GoRoute(
                       path: 'local-ocr',
-                      builder: (context, state) => const LocalOcrSettingsPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const LocalOcrSettingsPage(),
+                      ),
                     ),
                     GoRoute(
                       path: 'prompts',
-                      builder: (context, state) =>
-                          const AiPromptsSettingsPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const AiPromptsSettingsPage(),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: 'changelog',
-                  builder: (context, state) => const ChangelogPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const ChangelogPage(),
+                  ),
                   routes: <RouteBase>[
                     GoRoute(
                       path: 'history',
-                      builder: (context, state) => const ChangelogHistoryPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const ChangelogHistoryPage(),
+                      ),
                     ),
                   ],
                 ),
                 GoRoute(
                   path: 'about',
-                  builder: (context, state) => const AboutSettingsPage(),
+                  pageBuilder: (context, state) => _settingsPage<void>(
+                    key: state.pageKey,
+                    child: const AboutSettingsPage(),
+                  ),
                   routes: <RouteBase>[
                     GoRoute(
                       path: 'privacy',
-                      builder: (context, state) => const PrivacyPolicyPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const PrivacyPolicyPage(),
+                      ),
                     ),
                     GoRoute(
                       path: 'user-agreement',
-                      builder: (context, state) => const UserAgreementPage(),
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const UserAgreementPage(),
+                      ),
+                    ),
+                    GoRoute(
+                      path: 'tutorial',
+                      pageBuilder: (context, state) => _settingsPage<void>(
+                        key: state.pageKey,
+                        child: const TutorialPage(),
+                      ),
                     ),
                   ],
                 ),

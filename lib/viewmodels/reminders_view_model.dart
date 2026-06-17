@@ -4,8 +4,11 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 
 import 'package:nousmind/models/reminder.dart';
+import 'package:nousmind/models/tag.dart';
 import 'package:nousmind/services/inspiration_image_store.dart';
+import 'package:nousmind/services/nearest_reminder_timer.dart';
 import 'package:nousmind/services/notification_service.dart';
+import 'package:nousmind/services/reminder_cleanup_service.dart';
 import 'package:nousmind/services/reminder_repository.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 
@@ -19,39 +22,54 @@ import 'package:nousmind/viewmodels/settings_view_model.dart';
 /// thrown, so a missing permission does not break the in-memory flow.
 ///
 /// When [onReminderDue] is set, the view model tracks the nearest upcoming
-/// reminder via an internal timer and fires the callback at the exact
-/// [Reminder.reminderTime]. This is used to show an in-app popup regardless
-/// of which tab is active.
+/// reminder via an internal [_NearestReminderTimer] and fires the callback
+/// at the exact [Reminder.reminderTime]. This is used to show an in-app
+/// popup regardless of which tab is active.
 ///
-/// Soft-deleted reminders are kept in the database for [trashRetention]
-/// so the user can restore them from the trash page. Rows past that
-/// window are purged permanently along with their image files.
+/// Soft-deleted reminders are kept in the database for
+/// [ReminderRepository.trashRetention] so the user can restore them from
+/// the trash page. Rows past that window are purged permanently along
+/// with their image files by [ReminderCleanupService].
 class RemindersViewModel extends ChangeNotifier {
   RemindersViewModel(
     this._repository,
     this._notifications,
     this._settings,
     this._imageStore,
+    this._cleanup,
   ) {
+    // Built in the body (not the initializer list) because the timer's
+    // `onDue` closure reads the instance field `onReminderDue`, which
+    // is not yet accessible from an initializer. The closure captures
+    // `this` by reference, so any later assignment to `onReminderDue`
+    // is honoured without rebuilding the timer.
+    _timer = NearestReminderTimer(
+      onDue: (reminder) => onReminderDue?.call(reminder),
+    );
     _bootstrap();
   }
-
-  /// How long a soft-deleted reminder stays in the trash before the
-  /// next purge sweep removes it permanently. Hard-coded for now;
-  /// promoting it to a user-facing setting is on the roadmap but
-  /// intentionally out of scope for v1.3.0.
-  static const Duration trashRetention = Duration(days: 30);
 
   final ReminderRepository _repository;
   final NotificationService _notifications;
   final SettingsViewModel _settings;
   final InspirationImageStore _imageStore;
+  final ReminderCleanupService _cleanup;
+  late final NearestReminderTimer _timer;
   final List<Reminder> _reminders = <Reminder>[];
 
   /// Cached trash count, kept in sync with every soft-delete / restore /
   /// purge. Surfaced by the data-settings tile and the trash page
   /// header. Updated through [notifyListeners] on every change.
   int _trashCount = 0;
+
+  /// Currently-applied tag filter. `null` means "全部" (all). A
+  /// non-null value is a [Tag.id]; the filter UI maps "已完成" to
+  /// [kCompletedTagId] so a single selection covers both real
+  /// tags and the pseudo-category. Survives hot reload and page
+  /// rebuilds so the user can navigate away and back without
+  /// losing the current filter.
+  String? _selectedTagId;
+  String? get selectedTagId => _selectedTagId;
 
   bool _loaded = false;
   bool get isLoaded => _loaded;
@@ -61,21 +79,55 @@ class RemindersViewModel extends ChangeNotifier {
   /// running. Set by [main] to show an in-app popup.
   void Function(Reminder)? onReminderDue;
 
-  Timer? _nearestTimer;
-
   /// Unmodifiable view of the current list of active (non-trashed)
-  /// reminders.
+  /// reminders, in `created_at DESC` order. Use [visibleReminders]
+  /// from the home page so the active tag filter and the
+  /// complete-to-bottom sort are applied.
   List<Reminder> get reminders => List.unmodifiable(_reminders);
+
+  /// The list the home page should render. Applies the current
+  /// [selectedTagId] filter, and — in the "全部" view — pushes
+  /// completed rows to the bottom so the active reminders stay
+  /// grouped above the done ones. The order is stable: within each
+  /// bucket, items are sorted by `created_at DESC, id DESC` so
+  /// concurrent adds (which share the same microsecond tick) do
+  /// not flicker.
+  List<Reminder> get visibleReminders {
+    final filter = _selectedTagId;
+    final base = filter == null
+        ? List<Reminder>.of(_reminders)
+        : _reminders.where((r) => r.tagId == filter).toList();
+    int compareActiveFirst(Reminder a, Reminder b) {
+      if (a.isCompleted != b.isCompleted) {
+        return a.isCompleted ? 1 : -1;
+      }
+      final byCreated = b.createdAt.compareTo(a.createdAt);
+      if (byCreated != 0) return byCreated;
+      return b.id.compareTo(a.id);
+    }
+
+    base.sort(compareActiveFirst);
+    return List.unmodifiable(base);
+  }
 
   /// Number of reminders currently in the trash. Cheap read; the
   /// underlying value is refreshed by every mutating call so consumers
   /// that listen on the same `ChangeNotifier` get live updates.
   int get trashCount => _trashCount;
 
+  bool _disposed = false;
+
   @override
   void dispose() {
-    _cancelNearestTimer();
+    _disposed = true;
+    _timer.dispose();
     super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
   }
 
   Future<void> _bootstrap() async {
@@ -89,7 +141,7 @@ class RemindersViewModel extends ChangeNotifier {
     // Re-arm any future reminders. Covers the case where the OS dropped
     // scheduled alarms (e.g. Android after device reboot).
     await _rescheduleAll();
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
     // Honour the user's auto-delete preference and the 30-day trash
     // retention on cold start so stale rows don't accumulate forever.
     await _purgeTrashAndExpired();
@@ -137,6 +189,7 @@ class RemindersViewModel extends ChangeNotifier {
     required DateTime reminderTime,
     String? imagePath,
     String? description,
+    String? tagId,
   }) async {
     final reminder = Reminder(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -144,13 +197,14 @@ class RemindersViewModel extends ChangeNotifier {
       reminderTime: reminderTime,
       imagePath: imagePath,
       description: description,
+      tagId: tagId,
     );
     _reminders.add(reminder);
     await _repository.insert(reminder);
     notifyListeners();
     await _notifications.requestPermissions();
     await _safeSchedule(reminder);
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Replaces the reminder with the same [Reminder.id] and persists it.
@@ -164,13 +218,14 @@ class RemindersViewModel extends ChangeNotifier {
     await _repository.update(reminder);
     await _notifications.cancelReminder(reminder.id);
     await _safeSchedule(reminder);
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Soft-deletes a reminder. The row is kept in the database for
-  /// [trashRetention] so the user can restore it from the trash page;
-  /// the scheduled notification (if any) is cancelled immediately so
-  /// the user does not get notified for something they just deleted.
+  /// [ReminderRepository.trashRetention] so the user can restore it
+  /// from the trash page; the scheduled notification (if any) is
+  /// cancelled immediately so the user does not get notified for
+  /// something they just deleted.
   /// The on-disk image is **not** removed — the permanent-delete
   /// path handles image cleanup so a restore keeps the picture.
   Future<void> softDelete(String id, {DateTime? now}) async {
@@ -196,7 +251,7 @@ class RemindersViewModel extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Restores a trashed reminder back to the active list. Re-arms the
@@ -216,7 +271,7 @@ class RemindersViewModel extends ChangeNotifier {
     if (restored.reminderTime.isAfter(DateTime.now())) {
       await _safeSchedule(restored);
     }
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Batch-restores multiple trashed reminders via a single SQL pass.
@@ -241,7 +296,7 @@ class RemindersViewModel extends ChangeNotifier {
     await Future.wait(
       toRestore.where((r) => r.reminderTime.isAfter(now)).map(_safeSchedule),
     );
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
     return toRestore.length;
   }
 
@@ -272,7 +327,7 @@ class RemindersViewModel extends ChangeNotifier {
         stackTrace: stackTrace,
       );
     }
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
     return toTrash.length;
   }
 
@@ -349,86 +404,37 @@ class RemindersViewModel extends ChangeNotifier {
     await _repository.update(snoozed);
     await _notifications.cancelReminder(id);
     await _safeSchedule(snoozed);
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Combined sweep that runs on cold start and on every foreground
-  /// resume:
-  ///   1. Permanently deletes trashed rows older than [trashRetention]
-  ///      and the associated image files.
-  ///   2. When the user has `autoDeleteAfter24h` enabled, permanently
-  ///      deletes active rows whose fire time is more than 24 h in the
-  ///      past.
+  /// resume. Delegates the actual purge work to [ReminderCleanupService]
+  /// and only updates the view-model state when something actually
+  /// changed:
   ///
-  /// The two passes are independent: a row that was soft-deleted 30
-  /// days ago is purged regardless of the auto-delete setting, and
-  /// vice versa. Both passes update the in-memory cache and emit
-  /// `notifyListeners` exactly once at the end.
+  ///   * `_cleanup.purgeExpiredTrash` — returns the number of trashed
+  ///     rows purged. If non-zero, refresh `_trashCount` so the
+  ///     data-settings tile reflects the new total.
+  ///   * `_cleanup.purgeExpiredActive` — returns the IDs of active
+  ///     rows purged under the user's 24h auto-delete setting. Drop
+  ///     those from `_reminders` and re-arm the in-app timer.
+  ///
+  /// `notifyListeners` is fired at most once at the end of the sweep.
   Future<void> _purgeTrashAndExpired() async {
-    final trashCutoff = DateTime.now().subtract(trashRetention);
-    final purgedTrashImages = await _repository.purgeTrashOlderThan(
-      trashCutoff,
-    );
-    for (final imagePath in purgedTrashImages) {
-      if (imagePath == null) continue;
-      try {
-        await _imageStore.deleteByPath(imagePath);
-      } on Exception catch (error, stackTrace) {
-        developer.log(
-          'Failed to delete trashed reminder image during purge',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
-    final trashPurged = purgedTrashImages.isNotEmpty;
-
-    if (!_settings.settings.autoDeleteAfter24h) {
-      if (trashPurged) {
-        _trashCount = await _repository.countTrash();
-        notifyListeners();
-      }
-      return;
+    final purgedCount = await _cleanup.purgeExpiredTrash();
+    if (purgedCount > 0) {
+      _trashCount = await _repository.countTrash();
     }
 
-    final now = DateTime.now();
-    final expired = _reminders
-        .where(
-          (r) => r.reminderTime.add(const Duration(hours: 24)).isBefore(now),
-        )
-        .toList();
-    for (final reminder in expired) {
-      try {
-        await _notifications.cancelReminder(reminder.id);
-      } on Exception catch (error, stackTrace) {
-        developer.log(
-          'Failed to cancel notification during purge',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-      final imagePath = reminder.imagePath;
-      if (imagePath != null) {
-        try {
-          await _imageStore.deleteByPath(imagePath);
-        } on Exception catch (error, stackTrace) {
-          developer.log(
-            'Failed to delete reminder image during purge',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }
-      await _repository.permanentDelete(reminder.id);
+    final expiredIds = await _cleanup.purgeExpiredActive(_reminders);
+    if (expiredIds.isNotEmpty) {
+      _reminders.removeWhere((r) => expiredIds.contains(r.id));
     }
-    _reminders.removeWhere((r) => expired.any((e) => e.id == r.id));
-    if (trashPurged || expired.isNotEmpty) {
-      if (trashPurged) {
-        _trashCount = await _repository.countTrash();
-      }
+
+    if (purgedCount > 0 || expiredIds.isNotEmpty) {
       notifyListeners();
     }
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 
   /// Public hook so the app's lifecycle observer can trigger a purge on
@@ -468,7 +474,7 @@ class RemindersViewModel extends ChangeNotifier {
       }
     }
     final removed = await _repository.clearAll();
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
     return removed;
   }
 
@@ -478,7 +484,15 @@ class RemindersViewModel extends ChangeNotifier {
   ///
   /// Returns the number of reminders actually added.
   Future<int> addMultiple(
-    List<({String title, DateTime reminderTime, String? description})> drafts,
+    List<
+      ({
+        String title,
+        DateTime reminderTime,
+        String? description,
+        String? tagId,
+      })
+    >
+    drafts,
   ) async {
     if (drafts.isEmpty) return 0;
     final baseId = DateTime.now().microsecondsSinceEpoch;
@@ -490,6 +504,7 @@ class RemindersViewModel extends ChangeNotifier {
         title: draft.title,
         reminderTime: draft.reminderTime,
         description: draft.description,
+        tagId: draft.tagId,
       );
       _reminders.add(reminder);
       newcomers.add(reminder);
@@ -497,44 +512,82 @@ class RemindersViewModel extends ChangeNotifier {
     }
     await _repository.insertAll(newcomers);
     notifyListeners();
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
     return drafts.length;
   }
 
-  // ---- In-app due-timer helpers --------------------------------
-
-  void _cancelNearestTimer() {
-    _nearestTimer?.cancel();
-    _nearestTimer = null;
+  /// Updates the active tag filter. Pass `null` for "全部". A
+  /// [Selector] over the resulting list means the AppBar rebuilds
+  /// without touching the reminder list cache.
+  void setSelectedTagId(String? id) {
+    if (_selectedTagId == id) return;
+    _selectedTagId = id;
+    notifyListeners();
   }
 
-  /// Finds the nearest future [Reminder.reminderTime] and arms a one-shot
-  /// [Timer] to fire at that instant. Timer is best-effort; on some
-  /// platforms (Android Doze) the callback may be delayed.
-  void _scheduleNearestTimer() {
-    _cancelNearestTimer();
-    final now = DateTime.now();
-    Reminder? nearest;
-    for (final reminder in _reminders) {
-      if (reminder.reminderTime.isAfter(now)) {
-        if (nearest == null ||
-            reminder.reminderTime.isBefore(nearest.reminderTime)) {
-          nearest = reminder;
-        }
+  /// Marks a reminder as complete (or un-completes it). On complete,
+  /// the reminder is tagged with [kCompletedTagId] and its previously
+  /// selected [tagId] is stashed into [Reminder.previousTagId] so the
+  /// original category is recoverable. On un-complete, the stashed
+  /// [Reminder.previousTagId] is restored as [tagId] (and the slot is
+  /// cleared) — if the reminder was uncategorised before completion,
+  /// `tagId` is restored to `null`. The scheduled OS notification is
+  /// cancelled on complete; a future-fire-time notification is re-armed
+  /// on un-complete. Past-due reminders stay un-armed even on
+  /// un-complete, matching the restore path's behaviour.
+  Future<void> setCompleted(String id, bool value) async {
+    final index = _reminders.indexWhere((r) => r.id == id);
+    if (index == -1) return;
+    final original = _reminders[index];
+    final Reminder next;
+    if (value) {
+      // Stash the pre-completion tag so un-complete can restore it.
+      // Skip the stash if the row is already completed (idempotent
+      // re-tap) or if the current tag is itself the completed
+      // pseudo-id (defensive: avoid turning `previousTagId` into
+      // `kCompletedTagId`).
+      final stash = (original.tagId != null &&
+              original.tagId != kCompletedTagId)
+          ? original.tagId
+          : original.previousTagId;
+      next = original.copyWith(
+        tagId: kCompletedTagId,
+        previousTagId: stash,
+      );
+    } else {
+      // Restore the pre-completion tag (or null if there was none) and
+      // clear the slot so a future complete cycle starts fresh.
+      // `clearTagId` is needed when restoring to null because
+      // `Reminder.copyWith` treats a null `tagId` argument as
+      // "leave alone" — see reminder.dart: tagId is only nulled out
+      // when `clearTagId` is true.
+      next = original.copyWith(
+        tagId: original.previousTagId,
+        clearTagId: original.previousTagId == null,
+        clearPreviousTagId: true,
+      );
+    }
+    // Skip persistence and side-effects when nothing changed.
+    if (next.tagId == original.tagId &&
+        next.previousTagId == original.previousTagId) {
+      return;
+    }
+    _reminders[index] = next;
+    notifyListeners();
+    await _repository.update(next);
+    if (value) {
+      try {
+        await _notifications.cancelReminder(id);
+      } on Exception catch (error, stackTrace) {
+        developer.log(
+          'Failed to cancel notification during complete',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
+    } else if (next.reminderTime.isAfter(DateTime.now())) {
+      await _safeSchedule(next);
     }
-    if (nearest == null) {
-      return;
-    }
-    final delay = nearest.reminderTime.difference(now);
-    if (delay <= Duration.zero) {
-      return;
-    }
-    _nearestTimer = Timer(delay, () => _onNearestDue(nearest!));
-  }
-
-  void _onNearestDue(Reminder reminder) {
-    onReminderDue?.call(reminder);
-    _scheduleNearestTimer();
+    _timer.schedule(_reminders);
   }
 }

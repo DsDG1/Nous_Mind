@@ -20,11 +20,9 @@ extension ShowAppSnackBarX on BuildContext {
     Duration? duration,
     SnackBarAction? action,
   }) {
-    ScaffoldMessenger.of(this).showAppSnackBar(
-      message,
-      duration: duration,
-      action: action,
-    );
+    ScaffoldMessenger.of(
+      this,
+    ).showAppSnackBar(message, duration: duration, action: action);
   }
 }
 
@@ -36,10 +34,12 @@ extension ShowAppSnackBarOnMessengerX on ScaffoldMessengerState {
   }) {
     this
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(
-        content: Text(message),
-        duration: duration ?? const Duration(milliseconds: 4000),
-        action: action,
-      ));
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: duration ?? const Duration(milliseconds: 4000),
+          action: action,
+        ),
+      );
   }
 }

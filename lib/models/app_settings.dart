@@ -146,10 +146,12 @@ class AppSettings {
     this.chineseOcrEnabled = true,
     this.aiErrorAnalysisPrompt,
     this.aiAdjustPrompt,
+    this.aiInspirationPrompt,
     this.aiDailyLimit = _defaultAiDailyLimit,
     this.aiDailyLimitEnabled = true,
     this.aiCallsToday = 0,
     this.aiCallsResetAt,
+    this.aiConsentAcceptedAt,
   });
 
   /// Default ceiling on AI calls per local-day. The guard refuses new
@@ -203,6 +205,11 @@ class AppSettings {
   /// `{{weekday}}` placeholders as [aiAssistantPrompt].
   final String? aiAdjustPrompt;
 
+  /// User-customized system prompt template for the "灵感分析"
+  /// flow. `null` means use the built-in template
+  /// (`DeepSeekAnalyzer.defaultInspirationAnalysisPromptTemplate`).
+  final String? aiInspirationPrompt;
+
   /// Hard ceiling on AI calls per local-day. Used by [AiUsageGuard] to
   /// refuse new calls once [aiCallsToday] reaches this value. The user
   /// can adjust it from the AI settings page; anything outside the
@@ -230,6 +237,14 @@ class AppSettings {
   /// first success.
   final DateTime? aiCallsResetAt;
 
+  /// Wall-clock instant the user accepted the AI assistant consent
+  /// dialog (User Agreement + Privacy Policy). `null` means the user
+  /// has not yet opted in, so the next time the AI assistant is
+  /// enabled the settings page will show the consent dialog. The
+  /// field is set once and never cleared, so the dialog only appears
+  /// the first time.
+  final DateTime? aiConsentAcceptedAt;
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     AppSeedColor? seedColor,
@@ -245,11 +260,14 @@ class AppSettings {
     bool clearAiErrorAnalysisPrompt = false,
     String? aiAdjustPrompt,
     bool clearAiAdjustPrompt = false,
+    String? aiInspirationPrompt,
+    bool clearAiInspirationPrompt = false,
     int? aiDailyLimit,
     bool? aiDailyLimitEnabled,
     int? aiCallsToday,
     DateTime? aiCallsResetAt,
     bool clearAiCallsResetAt = false,
+    DateTime? aiConsentAcceptedAt,
   }) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
@@ -268,12 +286,16 @@ class AppSettings {
       aiAdjustPrompt: clearAiAdjustPrompt
           ? null
           : (aiAdjustPrompt ?? this.aiAdjustPrompt),
+      aiInspirationPrompt: clearAiInspirationPrompt
+          ? null
+          : (aiInspirationPrompt ?? this.aiInspirationPrompt),
       aiDailyLimit: _normalizeDailyLimit(aiDailyLimit ?? this.aiDailyLimit),
       aiDailyLimitEnabled: aiDailyLimitEnabled ?? this.aiDailyLimitEnabled,
       aiCallsToday: aiCallsToday ?? this.aiCallsToday,
       aiCallsResetAt: clearAiCallsResetAt
           ? null
           : (aiCallsResetAt ?? this.aiCallsResetAt),
+      aiConsentAcceptedAt: aiConsentAcceptedAt ?? this.aiConsentAcceptedAt,
     );
   }
 
@@ -291,11 +313,15 @@ class AppSettings {
     if (aiErrorAnalysisPrompt != null)
       'ai_error_analysis_prompt': aiErrorAnalysisPrompt,
     if (aiAdjustPrompt != null) 'ai_adjust_prompt': aiAdjustPrompt,
+    if (aiInspirationPrompt != null)
+      'ai_inspiration_prompt': aiInspirationPrompt,
     'ai_daily_limit': aiDailyLimit,
     'ai_daily_limit_enabled': aiDailyLimitEnabled,
     'ai_calls_today': aiCallsToday,
     if (aiCallsResetAt != null)
       'ai_calls_reset_at': aiCallsResetAt!.toIso8601String(),
+    if (aiConsentAcceptedAt != null)
+      'ai_consent_accepted_at': aiConsentAcceptedAt!.toIso8601String(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -340,12 +366,16 @@ class AppSettings {
         json['ai_error_analysis_prompt'],
       ),
       aiAdjustPrompt: _normalizeOptionalString(json['ai_adjust_prompt']),
+      aiInspirationPrompt: _normalizeOptionalString(
+        json['ai_inspiration_prompt'],
+      ),
       aiDailyLimit: _normalizeDailyLimit(
         (json['ai_daily_limit'] as int?) ?? _defaultAiDailyLimit,
       ),
       aiDailyLimitEnabled: (json['ai_daily_limit_enabled'] as bool?) ?? true,
       aiCallsToday: _normalizeCallsToday(json['ai_calls_today']),
       aiCallsResetAt: _parseResetAt(json['ai_calls_reset_at']),
+      aiConsentAcceptedAt: _parseResetAt(json['ai_consent_accepted_at']),
     );
   }
 
