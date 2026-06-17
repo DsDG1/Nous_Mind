@@ -159,21 +159,14 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
               subtitle: hasFilter ? '切换筛选条件以查看其他提醒' : '点击右下角 + 添加',
             );
           }
-          return ListView.separated(
-            itemCount: items.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final reminder = items[index];
-              return ReminderListItem(
-                reminder: reminder,
-                onTap: () => _openEditorFromItem(context, reminder),
-                onDelete: () =>
-                    _deleteWithFeedback(context, viewModel, reminder),
-                onAddToCalendar: () => _addToCalendarWithFeedback(reminder),
-                onToggleComplete: () =>
-                    viewModel.setCompleted(reminder.id, !reminder.isCompleted),
-              );
-            },
+          return _AnimatedRemindersList(
+            items: items,
+            onTap: (reminder) => _openEditorFromItem(context, reminder),
+            onDelete: (reminder) =>
+                _deleteWithFeedback(context, viewModel, reminder),
+            onAddToCalendar: _addToCalendarWithFeedback,
+            onToggleComplete: (reminder) =>
+                viewModel.setCompleted(reminder.id, !reminder.isCompleted),
           );
         },
       ),
@@ -195,5 +188,220 @@ class _RemindersHomePageState extends State<RemindersHomePage> {
       if (t.id == tagId) return t.name;
     }
     return tagId;
+  }
+}
+
+/// `ListView.separated` wrapper that animates items when the data is
+/// re-sorted — typically when a reminder is toggled between active
+/// and completed and the active-first sort places it at a new index.
+///
+/// Each row gets a `_AnimatedReminderRow` which animates a
+/// `Transform.translate` from the previous y-position to the new one
+/// (FLIP — First, Last, Invert, Play). The first build records
+/// positions and the row height; subsequent builds compute the
+/// delta from the previous frame and replay it as a 350 ms slide.
+class _AnimatedRemindersList extends StatefulWidget {
+  const _AnimatedRemindersList({
+    required this.items,
+    required this.onTap,
+    required this.onDelete,
+    required this.onAddToCalendar,
+    required this.onToggleComplete,
+  });
+
+  final List<Reminder> items;
+  final void Function(Reminder reminder) onTap;
+  final void Function(Reminder reminder) onDelete;
+  final void Function(Reminder reminder) onAddToCalendar;
+  final void Function(Reminder reminder) onToggleComplete;
+
+  @override
+  State<_AnimatedRemindersList> createState() => _AnimatedRemindersListState();
+}
+
+class _AnimatedRemindersListState extends State<_AnimatedRemindersList> {
+  final GlobalKey _listKey = GlobalKey();
+  ScrollController? _localScrollController;
+
+  // Per-reminder measurement key. Stable across rebuilds so we can
+  // find each item's `RenderBox` after layout to read its y-position.
+  final Map<String, GlobalKey> _keys = <String, GlobalKey>{};
+  // Absolute Y-position of each item in the scrollable content container
+  // from the previous frame.
+  final Map<String, double> _lastY = <String, double>{};
+  // Individual height of each item, to support wrapping/multi-line layout.
+  final Map<String, double> _heights = <String, double>{};
+  // Row height fallback (ListTile + 1 px Divider). Measured/average.
+  double? _rowHeight;
+
+  ScrollController _getEffectiveScrollController() {
+    return PrimaryScrollController.maybeOf(context) ??
+        (_localScrollController ??= ScrollController());
+  }
+
+  @override
+  void dispose() {
+    _localScrollController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Measure positions after the next frame so _lastY and
+    // _rowHeight are up to date for the *following* build.
+    WidgetsBinding.instance.addPostFrameCallback(_recordPositions);
+
+    // Compute absolute Y positions for the current layout based on measured heights
+    final Map<String, double> newYAbsolute = {};
+    double currentY = 0.0;
+    final defaultHeight = _rowHeight ?? 56.0;
+    for (final item in widget.items) {
+      newYAbsolute[item.id] = currentY;
+      final itemHeight = _heights[item.id] ?? defaultHeight;
+      currentY += itemHeight + 1.0; // +1.0 for Divider(height: 1)
+    }
+
+    final scrollController = _getEffectiveScrollController();
+
+    return ListView.separated(
+      key: _listKey,
+      controller: scrollController,
+      itemCount: widget.items.length,
+      separatorBuilder: (context, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final reminder = widget.items[index];
+        final key = _keys.putIfAbsent(reminder.id, GlobalKey.new);
+        final newY = newYAbsolute[reminder.id]!;
+        // First build (no _lastY entry yet): offset is 0, no slide.
+        // The row simply renders at its natural position.
+        final oldY = _lastY[reminder.id] ?? newY;
+        final offset = oldY - newY;
+        return _AnimatedReminderRow(
+          // Keying the row by reminder id preserves the
+          // AnimationController state across rebuilds of the same
+          // item — even when the item changes index in the list.
+          key: ValueKey<String>(reminder.id),
+          offset: offset,
+          child: ReminderListItem(
+            key: key,
+            reminder: reminder,
+            onTap: () => widget.onTap(reminder),
+            onDelete: () => widget.onDelete(reminder),
+            onAddToCalendar: () => widget.onAddToCalendar(reminder),
+            onToggleComplete: () => widget.onToggleComplete(reminder),
+          ),
+        );
+      },
+    );
+  }
+
+  void _recordPositions(Duration _) {
+    final currentIds = widget.items.map((r) => r.id).toSet();
+    // Drop keys for items that left the visible list (filter
+    // changed, soft-deleted, etc.) so the map does not grow.
+    _keys.removeWhere((id, _) => !currentIds.contains(id));
+    _lastY.removeWhere((id, _) => !currentIds.contains(id));
+    _heights.removeWhere((id, _) => !currentIds.contains(id));
+
+    final listRenderBox = _listKey.currentContext?.findRenderObject() as RenderBox?;
+    if (listRenderBox == null) return;
+
+    final scrollController = _getEffectiveScrollController();
+    final scrollOffset = scrollController.hasClients ? scrollController.offset : 0.0;
+
+    final newY = <String, double>{};
+    for (final entry in _keys.entries) {
+      final renderBox =
+          entry.value.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox == null) continue;
+
+      // visual position relative to ListView viewport
+      final localOffset = renderBox.localToGlobal(Offset.zero, ancestor: listRenderBox);
+
+      // absolute position in scrollable content
+      newY[entry.key] = localOffset.dy + scrollOffset;
+
+      // record height
+      _heights[entry.key] = renderBox.size.height;
+    }
+
+    if (_heights.isNotEmpty) {
+      _rowHeight = _heights.values.reduce((a, b) => a + b) / _heights.length;
+    }
+
+    _lastY
+      ..clear()
+      ..addAll(newY);
+  }
+}
+
+/// Wraps a row in `Transform.translate` driven by an
+/// `AnimationController`. When [offset] changes (parent detected
+/// the row moved), the controller is reset and re-fires from the
+/// new offset back to 0. Chaining rapid reorders produces a
+/// smooth redirect from wherever the row currently sits.
+class _AnimatedReminderRow extends StatefulWidget {
+  const _AnimatedReminderRow({
+    super.key,
+    required this.offset,
+    required this.child,
+  });
+
+  final double offset;
+  final Widget child;
+
+  @override
+  State<_AnimatedReminderRow> createState() => _AnimatedReminderRowState();
+}
+
+class _AnimatedReminderRowState extends State<_AnimatedReminderRow>
+    with SingleTickerProviderStateMixin {
+  static const Duration _duration = Duration(milliseconds: 350);
+
+  late final AnimationController _controller;
+  late Animation<double> _animation;
+  double _lastOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _duration);
+    _animation = _buildAnimation(widget.offset);
+    if (widget.offset != 0) _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedReminderRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.offset != _lastOffset) {
+      _animation = _buildAnimation(widget.offset);
+      _controller
+        ..reset()
+        ..forward();
+      _lastOffset = widget.offset;
+    }
+  }
+
+  Animation<double> _buildAnimation(double offset) => CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOutCubic,
+  ).drive(Tween<double>(begin: offset, end: 0));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _animation.value),
+        child: child,
+      ),
+      child: widget.child,
+    );
   }
 }

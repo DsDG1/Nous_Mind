@@ -34,11 +34,16 @@ class QuickSettingsTileBridge {
   static const MethodChannel _channel = MethodChannel('quick_settings_tile');
 
   void Function()? _onOpenCreate;
+  void Function(String path)? _onOpenScreenshotAnalysis;
 
   /// Idempotent. Install the native → Dart handler and remember the
-  /// callback used by both the hot-path and the cold-start drain.
-  void init({void Function()? onOpenCreate}) {
+  /// callbacks used by both the hot-path and the cold-start drain.
+  void init({
+    void Function()? onOpenCreate,
+    void Function(String path)? onOpenScreenshotAnalysis,
+  }) {
     _onOpenCreate = onOpenCreate;
+    _onOpenScreenshotAnalysis = onOpenScreenshotAnalysis;
     _channel.setMethodCallHandler(_handleNativeCall);
   }
 
@@ -47,17 +52,58 @@ class QuickSettingsTileBridge {
   /// router is mounted. No-op on non-Android platforms.
   Future<void> consumePending() async {
     try {
-      final result = await _channel.invokeMethod<bool>(
+      final quickAddResult = await _channel.invokeMethod<bool>(
         'consumePendingQuickAdd',
       );
-      if (result == true) {
+      if (quickAddResult == true) {
         _onOpenCreate?.call();
+      }
+
+      final screenshotPath = await _channel.invokeMethod<String?>(
+        'consumePendingScreenshot',
+      );
+      if (screenshotPath != null && screenshotPath.isNotEmpty) {
+        _onOpenScreenshotAnalysis?.call(screenshotPath);
       }
     } on MissingPluginException {
       // Non-Android or channel unavailable — nothing to do.
     } on PlatformException catch (error, stack) {
       developer.log(
-        'quick_settings_tile: consumePendingQuickAdd failed',
+        'quick_settings_tile: consumePending failed',
+        error: error,
+        stackTrace: stack,
+      );
+    }
+  }
+
+  /// Queries whether our screenshot Accessibility Service is currently active on the device.
+  Future<bool> isAccessibilityServiceEnabled() async {
+    try {
+      final bool? enabled = await _channel.invokeMethod<bool>(
+        'isAccessibilityServiceEnabled',
+      );
+      return enabled ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException catch (error, stack) {
+      developer.log(
+        'quick_settings_tile: isAccessibilityServiceEnabled failed',
+        error: error,
+        stackTrace: stack,
+      );
+      return false;
+    }
+  }
+
+  /// Opens the system Accessibility Settings page so the user can enable our service.
+  Future<void> openAccessibilitySettings() async {
+    try {
+      await _channel.invokeMethod('openAccessibilitySettings');
+    } on MissingPluginException {
+      // Non-Android — nothing to do.
+    } on PlatformException catch (error, stack) {
+      developer.log(
+        'quick_settings_tile: openAccessibilitySettings failed',
         error: error,
         stackTrace: stack,
       );
@@ -68,6 +114,10 @@ class QuickSettingsTileBridge {
     switch (call.method) {
       case 'openCreateReminder':
         _onOpenCreate?.call();
+        return null;
+      case 'openScreenshotAnalysis':
+        final path = call.arguments as String;
+        _onOpenScreenshotAnalysis?.call(path);
         return null;
       default:
         throw MissingPluginException(
@@ -89,6 +139,15 @@ void navigateToQuickAddEditor() {
   developer.log('quick_settings_tile: navigating to /editor');
   WidgetsBinding.instance.addPostFrameCallback((_) {
     router.go('/editor', extra: (null, _defaultEditorCenter()));
+  });
+}
+
+/// Shared handler registered with [QuickSettingsTileBridge] for screenshot analysis.
+/// Navigates to the reminder editor, setting initialImagePath to the path.
+void navigateToScreenshotAnalysis(String path) {
+  developer.log('quick_settings_tile: navigating to /editor with screenshot: $path');
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    router.go('/editor', extra: (null, _defaultEditorCenter(), path));
   });
 }
 

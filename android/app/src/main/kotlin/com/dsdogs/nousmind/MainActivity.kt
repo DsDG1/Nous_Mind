@@ -26,6 +26,7 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL = "quick_settings_tile"
         private const val APP_SETTINGS_CHANNEL = "app_settings"
         const val EXTRA_OPEN_QUICK_ADD = "OPEN_QUICK_ADD"
+        const val EXTRA_SCREENSHOT_PATH = "SCREENSHOT_PATH"
     }
 
     private var tileChannel: MethodChannel? = null
@@ -34,18 +35,15 @@ class MainActivity : FlutterActivity() {
 
     /**
      * Set when a tile click arrived while Dart was not yet listening.
-     * Consumed atomically by the first Dart `consumePendingQuickAdd`
-     * call after engine boot. An instance field is sufficient because
-     * the field is only read by the same [MainActivity] instance that
-     * wrote it; the bridge forwards the click into Dart before the
-     * process can be torn down.
      */
     private val pendingQuickAdd: AtomicBoolean = AtomicBoolean(false)
+    private var pendingScreenshotPath: String? = null
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         deliverIfQuickAdd(intent)
+        deliverIfScreenshot(intent)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -62,6 +60,25 @@ class MainActivity : FlutterActivity() {
                     val pending = pendingQuickAdd.getAndSet(false)
                     result.success(pending)
                 }
+                "consumePendingScreenshot" -> {
+                    val path = pendingScreenshotPath
+                    pendingScreenshotPath = null
+                    result.success(path)
+                }
+                "isAccessibilityServiceEnabled" -> {
+                    result.success(ScreenshotAccessibilityService.instance != null)
+                }
+                "openAccessibilitySettings" -> {
+                    try {
+                        val settingsIntent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(settingsIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
@@ -69,25 +86,12 @@ class MainActivity : FlutterActivity() {
         registerChineseOcrChannels(flutterEngine)
         registerAppSettingsChannel(flutterEngine)
 
-        // The current intent (set in onCreate or by onNewIntent) may
-        // already be carrying a quick-add request. Drain it now so a
-        // single-tap, single-handler delivery works in every order.
-        intent?.let { deliverIfQuickAdd(it) }
+        intent?.let {
+            deliverIfQuickAdd(it)
+            deliverIfScreenshot(it)
+        }
     }
 
-    /**
-     * Wires the `chinese_ocr_module` MethodChannel used by
-     * `lib/services/chinese_ocr_installer.dart`.
-     *
-     * The Chinese model is statically linked into the APK via the
-     * `com.google.mlkit:text-recognition-chinese` dependency in
-     * `app/build.gradle.kts`, so the runtime answer to "is the model
-     * available?" is unconditionally "installed" on Android. We keep
-     * the channel anyway so the Dart side can probe the state through
-     * a single, future-proof entry point — if a future release moves
-     * to an unbundled Play Services module, only this handler needs
-     * to change.
-     */
     private fun registerChineseOcrChannels(flutterEngine: FlutterEngine) {
         val method = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -97,25 +101,12 @@ class MainActivity : FlutterActivity() {
         method.setMethodCallHandler { call, result ->
             when (call.method) {
                 "checkModule" -> result.success("installed")
-                // Kept for API symmetry with the Dart installer. With
-                // the bundled model there is nothing to download —
-                // we just report the current (always installed)
-                // state.
                 "requestDownload" -> result.success("installed")
                 else -> result.notImplemented()
             }
         }
     }
 
-    /**
-     * Wires the `app_settings` MethodChannel used by
-     * `lib/services/app_settings_bridge.dart`.
-     *
-     * Lets Dart jump straight to the OS app-details screen so users who
-     * previously denied the calendar permission can re-enable it
-     * without hunting through system Settings. Mirrors the existing
-     * `chinese_ocr_module` and `quick_settings_tile` channels.
-     */
     private fun registerAppSettingsChannel(flutterEngine: FlutterEngine) {
         val channel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -126,7 +117,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "openAppSettings" -> {
                     val launched = try {
-                        val intent = Intent(
+                        val settingsIntent = Intent(
                             android.provider.Settings
                                 .ACTION_APPLICATION_DETAILS_SETTINGS,
                         ).apply {
@@ -137,7 +128,7 @@ class MainActivity : FlutterActivity() {
                             )
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
-                        startActivity(intent)
+                        startActivity(settingsIntent)
                         true
                     } catch (error: Exception) {
                         false
@@ -159,17 +150,17 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 
-    /**
-     * If the intent carries a quick-add request, mark the pending flag
-     * (so a future Dart consumePending call also handles it, in case the
-     * channel handler is not yet installed) and proactively invoke the
-     * openCreateReminder method to trigger the Dart hot-path handler.
-     */
     private fun deliverIfQuickAdd(intent: Intent) {
         if (!intent.getBooleanExtra(EXTRA_OPEN_QUICK_ADD, false)) return
-        // Clear the extra so a config-change re-delivery doesn't fire twice.
         intent.removeExtra(EXTRA_OPEN_QUICK_ADD)
         pendingQuickAdd.set(true)
         tileChannel?.invokeMethod("openCreateReminder", null)
+    }
+
+    private fun deliverIfScreenshot(intent: Intent) {
+        val path = intent.getStringExtra(EXTRA_SCREENSHOT_PATH) ?: return
+        intent.removeExtra(EXTRA_SCREENSHOT_PATH)
+        pendingScreenshotPath = path
+        tileChannel?.invokeMethod("openScreenshotAnalysis", path)
     }
 }

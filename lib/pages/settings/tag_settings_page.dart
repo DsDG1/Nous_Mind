@@ -247,6 +247,7 @@ class _TagEditDialogState extends State<_TagEditDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: Text(widget.initial == null ? '添加标签' : '编辑标签'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

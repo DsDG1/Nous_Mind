@@ -30,9 +30,10 @@ import 'package:nousmind/widgets/tag_filter_sheet.dart';
 /// When [initial] is null the page is in "add" mode; otherwise it pre-fills
 /// the form.
 class ReminderEditorPage extends StatefulWidget {
-  const ReminderEditorPage({super.key, this.initial});
+  const ReminderEditorPage({super.key, this.initial, this.initialImagePath});
 
   final Reminder? initial;
+  final String? initialImagePath;
 
   bool get isEditing => initial != null;
 
@@ -77,7 +78,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
       text: widget.initial?.description ?? '',
     );
     _reminderTime = widget.initial?.reminderTime ?? _defaultTime();
-    _imagePath = widget.initial?.imagePath;
+    _imagePath = widget.initial?.imagePath ?? widget.initialImagePath;
     final initialTag = widget.initial?.tagId;
     // Don't show the "已完成" pseudo-tag in the editor — that
     // category is set by the row's complete button, not by manual
@@ -87,6 +88,30 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
         ? initialTag
         : null;
     _resolveTimezone();
+
+    if (widget.initialImagePath != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _runAiAdjust();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(ReminderEditorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialImagePath != null &&
+        widget.initialImagePath != oldWidget.initialImagePath) {
+      setState(() {
+        _titleController.clear();
+        _descriptionController.clear();
+        _reminderTime = _defaultTime();
+        _imagePath = widget.initialImagePath;
+        _tagId = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _runAiAdjust();
+      });
+    }
   }
 
   @override
@@ -204,6 +229,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
       imagePath: _imagePath,
       timezone: _timezone,
       availableTags: availableTags,
+      skipConfirm: widget.initialImagePath != null,
     );
   }
 
@@ -401,6 +427,7 @@ class _ReminderEditorPageState extends State<ReminderEditorPage> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) => AlertDialog(
+            scrollable: true,
             title: const Text('新建标签'),
             content: Column(
               mainAxisSize: MainAxisSize.min,

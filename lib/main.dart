@@ -67,7 +67,10 @@ Future<void> main() async {
   // arrives via MainActivity.onNewIntent while the app is already
   // running. The cold-start case is handled by the post-frame
   // consumePending() below.
-  QuickSettingsTileBridge.instance.init(onOpenCreate: navigateToQuickAddEditor);
+  QuickSettingsTileBridge.instance.init(
+    onOpenCreate: navigateToQuickAddEditor,
+    onOpenScreenshotAnalysis: navigateToScreenshotAnalysis,
+  );
 
   runApp(
     RemindersApp(

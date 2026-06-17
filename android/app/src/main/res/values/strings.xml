@@ -2,4 +2,7 @@
 <resources>
     <!-- Quick Settings Tile label, surfaced in the shade's edit screen. -->
     <string name="tile_quick_add_label">快速添加提醒</string>
+    <string name="tile_screen_analysis_label">屏幕截图分析</string>
+    <string name="accessibility_service_label">NousMind 屏幕分析助手</string>
+    <string name="accessibility_service_description">用于在您点击快捷设置磁贴时自动获取屏幕截图以供 AI 助手进行分析建议。</string>
 </resources>

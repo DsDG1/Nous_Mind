@@ -50,15 +50,18 @@ Page<T> _settingsPage<T>({required LocalKey key, required Widget child}) {
   return MaterialPage<T>(
     key: key,
     child: Builder(
-      builder: (context) => PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop) {
-            context.pop();
-          }
-        },
-        child: child,
-      ),
+      builder: (context) {
+        final canPop = Navigator.of(context).canPop();
+        return PopScope(
+          canPop: !canPop,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop) {
+              Navigator.of(context).pop(result);
+            }
+          },
+          child: child,
+        );
+      },
     ),
   );
 }
@@ -85,19 +88,31 @@ final GoRouter router = GoRouter(
                   path: 'editor',
                   parentNavigatorKey: rootNavigatorKey,
                   pageBuilder: (context, state) {
-                    final extra = state.extra as (Reminder?, Offset?);
-                    final reminder = extra.$1;
-                    final center = extra.$2;
+                    final extra = state.extra;
+                    Reminder? reminder;
+                    Offset? center;
+                    String? initialImagePath;
+                    if (extra is (Reminder?, Offset?)) {
+                      reminder = extra.$1;
+                      center = extra.$2;
+                    } else if (extra is (Reminder?, Offset?, String?)) {
+                      reminder = extra.$1;
+                      center = extra.$2;
+                      initialImagePath = extra.$3;
+                    }
 
                     if (center != null) {
                       return CustomTransitionPage(
                         key: state.pageKey,
-                        child: ReminderEditorPage(initial: reminder),
+                        child: ReminderEditorPage(
+                          initial: reminder,
+                          initialImagePath: initialImagePath,
+                        ),
                         transitionsBuilder:
                             (context, animation, secondaryAnimation, child) {
                               return CircularRevealTransition(
                                 animation: animation,
-                                center: center,
+                                center: center!,
                                 child: child,
                               );
                             },
@@ -106,7 +121,10 @@ final GoRouter router = GoRouter(
 
                     return CustomTransitionPage(
                       key: state.pageKey,
-                      child: ReminderEditorPage(initial: reminder),
+                      child: ReminderEditorPage(
+                        initial: reminder,
+                        initialImagePath: initialImagePath,
+                      ),
                       transitionDuration: const Duration(milliseconds: 300),
                       reverseTransitionDuration: const Duration(
                         milliseconds: 300,

@@ -152,6 +152,7 @@ class ReminderAiAdjustController extends ChangeNotifier {
     required String timezone,
     List<({String id, String name})> availableTags =
         const <({String id, String name})>[],
+    bool skipConfirm = false,
   }) async {
     final settings = _settings.settings;
 
@@ -183,8 +184,10 @@ class ReminderAiAdjustController extends ChangeNotifier {
     }
     final allowed = verdict as AcquireAllowed;
 
-    final confirmed = await _askConfirm(allowed.remaining);
-    if (!confirmed) return;
+    if (!skipConfirm) {
+      final confirmed = await _askConfirm(allowed.remaining);
+      if (!confirmed) return;
+    }
 
     _setAnalyzing(true);
     try {

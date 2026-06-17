@@ -8,6 +8,7 @@ import 'package:nousmind/services/chinese_ocr_installer.dart';
 import 'package:nousmind/utils/snackbar_x.dart';
 import 'package:nousmind/viewmodels/settings_view_model.dart';
 import 'package:nousmind/widgets/settings_section.dart';
+import 'package:nousmind/services/quick_settings_tile_bridge.dart';
 
 /// Settings subpage that lists the configured AI assistant providers.
 /// Each provider renders as a tappable card with an inline enable
@@ -39,6 +40,11 @@ class AiSettingsPage extends StatelessWidget {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: _DeepSeekProviderCard(),
+            ),
+            SizedBox(height: 12),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: _ScreenshotAnalysisCard(),
             ),
             SizedBox(height: 12),
             Padding(
@@ -567,6 +573,172 @@ class _AgreeLink extends StatelessWidget {
             color: colors.primary,
             decoration: TextDecoration.underline,
             fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScreenshotAnalysisCard extends StatefulWidget {
+  const _ScreenshotAnalysisCard();
+
+  @override
+  State<_ScreenshotAnalysisCard> createState() => _ScreenshotAnalysisCardState();
+}
+
+class _ScreenshotAnalysisCardState extends State<_ScreenshotAnalysisCard>
+    with WidgetsBindingObserver {
+  bool _isEnabled = false;
+  bool _checking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkStatus();
+    }
+  }
+
+  Future<void> _checkStatus() async {
+    final enabled = await QuickSettingsTileBridge.instance.isAccessibilityServiceEnabled();
+    if (mounted) {
+      setState(() {
+        _isEnabled = enabled;
+        _checking = false;
+      });
+    }
+  }
+
+  void _showInstructionDialog(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = Theme.of(dialogContext).colorScheme;
+        return AlertDialog(
+          title: const Text('快捷截图分析'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text(
+                  '添加「屏幕截图分析」快捷设置磁贴到系统下拉菜单中。点击该磁贴即可捕获当前屏幕并自动 AI 分析。',
+                  style: TextStyle(height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '无感截图功能：',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: colors.primary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  '启用「NousMind 屏幕分析助手」辅助功能服务，允许磁贴点击时静默获取屏幕图像。否则，系统每次都会弹出投屏授权确认框。',
+                  style: TextStyle(height: 1.5, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '如何启用磁贴：\n1. 下拉系统通知栏，点击编辑按钮 (铅笔图标)。\n2. 在未添加磁贴列表中找到「屏幕截图分析」并拖到上方。\n3. 点击即可在任意界面开始截图分析。',
+                  style: TextStyle(height: 1.5, fontSize: 13, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
+            if (!_isEnabled)
+              FilledButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  QuickSettingsTileBridge.instance.openAccessibilitySettings();
+                },
+                child: const Text('开启无感截图'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final cardColor = colors.tertiary;
+
+    return Material(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(16),
+      elevation: 2,
+      shadowColor: cardColor.withValues(alpha: 0.5),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showInstructionDialog(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.screenshot_monitor_outlined,
+                  color: Colors.white,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    const Text(
+                      '快捷截图分析',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _checking
+                          ? '检查状态中…'
+                          : (_isEnabled
+                              ? '已开启无感截图 (免弹窗静默捕获)'
+                              : '未开启无感截图 (每次需弹窗确认)'),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white70),
+            ],
           ),
         ),
       ),
