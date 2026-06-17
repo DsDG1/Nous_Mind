@@ -1,11 +1,11 @@
 # 用户协议 / Terms of Service
 
-最后更新 / Last updated: 2026-06-15
+最后更新 / Last updated: 2026-06-17
 
-> **本项目说明**:Nous 记事(又称"提醒事项")是一款开源移动应用,源代码以 **MIT 许可证**发布,源代码托管在 GitHub。
+> **本项目说明**:Nous记事是一款开源移动应用,源代码以 **MIT 许可证**发布,源代码托管在 GitHub。
 > 本协议由两部分组成:**第一部分**是 MIT 许可证全文(中英);**第二部分**是关于本应用**预编译版本**的补充说明,仅在您使用应用商店下载的安装包时适用。
 >
-> **About this project**: Nous 记事 (a.k.a. "Reminders") is an open-source mobile application whose source code is released under the **MIT License**, hosted on GitHub. This Agreement consists of two parts: **Part 1** is the full text of the MIT License (Chinese and English); **Part 2** is a supplementary notice for users of the **pre-compiled application**, applicable only when you install the build distributed via the app stores.
+> **About this project**: Nous Mind is an open-source mobile application whose source code is released under the **MIT License**, hosted on GitHub. This Agreement consists of two parts: **Part 1** is the full text of the MIT License (Chinese and English); **Part 2** is a supplementary notice for users of the **pre-compiled application**, applicable only when you install the build distributed via the app stores.
 
 ## 简体中文
 
@@ -69,6 +69,7 @@ SOFTWARE.
 - 可选的第三方 AI 文字润色与一键调整(由用户自行填入 DeepSeek API Key)
 - 数据本地备份与恢复
 - 30 天回收站
+- 系统下拉「快捷截图分析磁贴」:基于 Android 无障碍服务一键截屏,并通过本地 ML Kit 提取文字后导入 AI 调整流程;用户可随时在系统设置中关闭该无障碍服务
 
 #### 2. 本地数据与隐私
 
@@ -94,6 +95,7 @@ SOFTWARE.
 | Google ML Kit Text Recognition | 本机 OCR | Google | <https://developers.google.com/ml-kit> |
 | 系统日历 | "加入日历"功能 | 操作系统 | 各 OS 厂商条款 |
 | 系统通知 | 提醒推送 | 操作系统 | 各 OS 厂商条款 |
+| Android 无障碍服务 | 快捷截图分析磁贴(一键截屏) | 操作系统 | 各 OS 厂商条款 |
 
 第三方服务的可用性、内容、隐私实践与中断由该第三方负责,开发者不承担因第三方原因造成的损失。
 
@@ -233,6 +235,7 @@ This application is the official pre-compiled distribution of the open-source pr
 - Optional third-party AI text polishing and one-tap adjustment (powered by DeepSeek API, using a User-supplied API key)
 - Local backup and restore
 - 30-day trash
+- Quick-settings screenshot analysis tile: one-tap screenshot via the Android Accessibility Service, on-device ML Kit OCR, then handed to the AI adjust flow. The accessibility service can be disabled at any time in system settings
 
 #### 2. Local Data and Privacy
 
@@ -258,6 +261,7 @@ The AI text polishing and one-tap adjustment features integrated into the applic
 | Google ML Kit Text Recognition | On-device OCR | Google | <https://developers.google.com/ml-kit> |
 | System Calendar | "Add to Calendar" feature | OS vendor | Each OS vendor's terms |
 | System Notifications | Reminder delivery | OS vendor | Each OS vendor's terms |
+| Android Accessibility Service | Quick-settings screenshot tile (one-tap capture) | OS vendor | Each OS vendor's terms |
 
 The availability, content, privacy practices, and interruptions of any third-party service are the responsibility of that third party. The Developer is not liable for losses caused by any third party.
 
